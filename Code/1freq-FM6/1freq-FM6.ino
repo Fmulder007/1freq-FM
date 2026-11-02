@@ -30,10 +30,18 @@
       менее чем на ADC_HYSTER отсчётов игнорируется.
     — Частота обновляется только при смене шага.
 
-  FUSE
-    Low:     62
-    High:    D1
-    Extended: FD
+FUSE1`s:
+
+ATmega328PA:
+Low      62
+High     D1
+Extended FD
+
+ATmega168PA:
+Low      62
+High     D5
+Extended F9
+
 */
 
 
