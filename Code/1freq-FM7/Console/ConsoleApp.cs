@@ -10,6 +10,8 @@ internal sealed class ConsoleApp
     private readonly string _root;
     private readonly DeviceCatalog _catalog;
     private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
+    private string _preferredProgrammerId = "usbasp";
+    private string? _preferredPort;
 
     private string ConfigDirectory => Path.Combine(_root, "Config");
     private string FirmwareDirectory => Path.Combine(_root, "Firmware");
@@ -17,12 +19,14 @@ internal sealed class ConsoleApp
     private string BackupDirectory => Path.Combine(_root, "Backup");
     private string ExtraAvrdudeConfig => Path.Combine(ConfigDirectory, "avrdude-extra.conf");
     private string SettingsPath => Path.Combine(DataDirectory, "last-settings.json");
+    private string PreferencesPath => Path.Combine(DataDirectory, "app-state.json");
     private string EepromHexPath => Path.Combine(FirmwareDirectory, "eeprom.hex");
 
     public ConsoleApp()
     {
         _root = AppContext.BaseDirectory;
         _catalog = CatalogLoader.Load(Path.Combine(ConfigDirectory, "devices.json"));
+        LoadPreferences();
     }
 
     public async Task RunAsync()
@@ -105,6 +109,8 @@ internal sealed class ConsoleApp
         Console.WriteLine("Каталог МК: " + _catalog.Devices.Count + " профиля(ей)");
         Console.WriteLine("AVRDUDE: " + (FindAvrdudeExecutable() is null ? "не найден" : "найден"));
         Console.WriteLine("Zadig: " + (File.Exists(Path.Combine(_root, "Tools", "Zadig.exe")) ? "найден" : "не найден"));
+        Console.WriteLine("Последний программатор: " + (_preferredProgrammerId == "arduino-isp" ? "Arduino Nano ISP" : "USBasp"));
+        if (!string.IsNullOrWhiteSpace(_preferredPort)) Console.WriteLine("Последний COM-порт: " + _preferredPort);
         Console.WriteLine("Папка приложения: " + _root);
     }
 
@@ -431,14 +437,18 @@ internal sealed class ConsoleApp
         Console.WriteLine("Выберите программатор:");
         Console.WriteLine("  1. USBasp");
         Console.WriteLine("  2. Arduino Nano с заранее загруженной ArduinoISP");
-        Console.Write("Вариант [1]: ");
+        var defaultChoice = _preferredProgrammerId == "arduino-isp" ? "2" : "1";
+        Console.Write($"Вариант [{defaultChoice}]: ");
 
         var choice = Console.ReadLine()?.Trim();
         if (string.IsNullOrEmpty(choice))
-            choice = "1";
+            choice = defaultChoice;
 
         if (choice == "1")
+        {
+            SavePreferences("usbasp", null);
             return new ProgrammerSelection("usbasp", "USBasp", "usbasp", null, null);
+        }
 
         if (choice != "2")
         {
@@ -446,16 +456,17 @@ internal sealed class ConsoleApp
             return null;
         }
 
-        var port = SelectComPort();
+        var port = SelectComPort(_preferredPort);
         if (port is null)
             return null;
 
+        SavePreferences("arduino-isp", port);
         Console.WriteLine("Arduino as ISP: STK500v1, 19200 бод.");
         Console.WriteLine("Nano должна быть заранее подготовлена скетчем ArduinoISP.");
         return new ProgrammerSelection("arduino-isp", "Arduino Nano (Arduino as ISP)", "stk500v1", port, 19200);
     }
 
-    private static string? SelectComPort()
+    private static string? SelectComPort(string? preferredPort)
     {
         var ports = GetComPorts();
 
@@ -472,7 +483,12 @@ internal sealed class ConsoleApp
             Console.Write("COM-порт Nano (например COM5): ");
         }
 
+        if (!string.IsNullOrWhiteSpace(preferredPort))
+            Console.Write($"COM-порт [{preferredPort}]: ");
+
         var input = Console.ReadLine()?.Trim();
+        if (string.IsNullOrWhiteSpace(input))
+            input = preferredPort;
         if (string.IsNullOrWhiteSpace(input))
             return null;
 
@@ -484,6 +500,45 @@ internal sealed class ConsoleApp
 
         WriteError("Ожидался COM-порт, например COM5.");
         return null;
+    }
+
+
+    private void LoadPreferences()
+    {
+        if (!File.Exists(PreferencesPath))
+            return;
+
+        try
+        {
+            var saved = JsonSerializer.Deserialize<ConsolePreferences>(File.ReadAllText(PreferencesPath));
+            if (saved is null)
+                return;
+
+            if (saved.ProgrammerId is "usbasp" or "arduino-isp")
+                _preferredProgrammerId = saved.ProgrammerId;
+
+            if (!string.IsNullOrWhiteSpace(saved.Port) &&
+                Regex.IsMatch(saved.Port, @"^COM[1-9][0-9]*$", RegexOptions.IgnoreCase))
+                _preferredPort = saved.Port.ToUpperInvariant();
+        }
+        catch (Exception ex)
+        {
+            WriteError("Не удалось прочитать сохранённый выбор программатора: " + ex.Message);
+        }
+    }
+
+    private void SavePreferences(string programmerId, string? port)
+    {
+        _preferredProgrammerId = programmerId;
+        _preferredPort = port;
+
+        Directory.CreateDirectory(DataDirectory);
+        var state = new ConsolePreferences
+        {
+            ProgrammerId = programmerId,
+            Port = port
+        };
+        File.WriteAllText(PreferencesPath, JsonSerializer.Serialize(state, _jsonOptions), new UTF8Encoding(false));
     }
 
     private static List<string> GetComPorts()
