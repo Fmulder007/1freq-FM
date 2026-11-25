@@ -786,17 +786,16 @@ internal sealed class ConsoleApp
     {
         while (true)
         {
-            Console.Write(question + " ДА или НЕТ [НЕТ]: ");
+            Console.Write(question + " (1 — да, 0 — нет) [0]: ");
             var answer = Console.ReadLine()?.Trim();
 
-            if (string.IsNullOrEmpty(answer) ||
-                string.Equals(answer, "НЕТ", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(answer) || answer == "0")
                 return false;
 
-            if (string.Equals(answer, "ДА", StringComparison.OrdinalIgnoreCase))
+            if (answer == "1")
                 return true;
 
-            WriteError("Введите ДА или НЕТ.");
+            WriteError("Введите 1 (да) или 0 (нет).");
         }
     }
 
