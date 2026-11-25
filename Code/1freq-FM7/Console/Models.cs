@@ -138,3 +138,9 @@ internal static class CatalogLoader
         }
     }
 }
+
+internal sealed class ConsolePreferences
+{
+    public string ProgrammerId { get; set; } = "usbasp";
+    public string? Port { get; set; }
+}
