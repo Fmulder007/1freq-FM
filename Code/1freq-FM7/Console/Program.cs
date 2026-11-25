@@ -53,7 +53,17 @@ internal static class Program
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine("SELF-TEST OK");
             Console.ResetColor();
-            Console.WriteLine($"Профилей МК: {catalog.Devices.Count}");
+            foreach (var item in catalog.Firmwares.Where(item => item.Value.Enabled))
+            {
+                var firmwarePath = Path.Combine(root, "Firmware", item.Key);
+                if (!File.Exists(firmwarePath))
+                    throw new FileNotFoundException("Не найден HEX из каталога: " + item.Key, firmwarePath);
+
+                var flashEnd = IntelHexInspector.ValidateFile(firmwarePath, item.Value.FlashBytes);
+                Console.WriteLine($"HEX OK: {item.Key}, занято {flashEnd} из {item.Value.FlashBytes} байт Flash.");
+            }
+
+            Console.WriteLine($"Профилей прошивок: {catalog.Firmwares.Count}");
             Console.WriteLine($"EEPROM FM7: {expectedBytes} байт, контрольные суммы Intel HEX корректны.");
         }
         finally
