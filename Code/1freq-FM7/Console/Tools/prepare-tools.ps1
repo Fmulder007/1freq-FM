@@ -10,7 +10,7 @@ $TempDir = Join-Path ([IO.Path]::GetTempPath()) ('1freq-fm-tools-' + [guid]::New
 $AvrdudeVersion = '8.3'
 $AvrdudeUrl = 'https://github.com/avrdudes/avrdude/releases/download/v8.3/avrdude-v8.3-windows_mingw-x64.zip'
 $AvrdudeSha256 = '7c42381a307ec9870a240bbefcb9b2499e90643256a766fe35baa4a6c558d994'
-$ZadigUrl = 'https://zadig.akeo.ie/downloads/zadig-2.9.exe'
+$ZadigUrl = 'https://github.com/pbatard/libwdi/releases/download/v1.5.1/zadig-2.9.exe'
 
 $SourceArchives = @(
     @{
