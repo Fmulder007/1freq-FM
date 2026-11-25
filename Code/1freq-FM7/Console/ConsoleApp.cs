@@ -275,7 +275,7 @@ internal sealed class ConsoleApp
         Console.WriteLine();
         Console.WriteLine("Резервная копия EEPROM: " + backupPath);
 
-        if (!Confirm("Начать прошивку?"))
+        if (!Confirm("Начать прошивку?", ConsoleColor.Yellow))
             return;
 
         Console.WriteLine();
@@ -810,11 +810,23 @@ internal sealed class ConsoleApp
         Process.Start(new ProcessStartInfo { FileName = zadig, UseShellExecute = true });
     }
 
-    private static bool Confirm(string question)
+    private static bool Confirm(string question, ConsoleColor? promptColor = null)
     {
         while (true)
         {
-            Console.Write(question + " (1 — да, 0 — нет) [0]: ");
+            var previousColor = Console.ForegroundColor;
+            try
+            {
+                if (promptColor.HasValue)
+                    Console.ForegroundColor = promptColor.Value;
+
+                Console.Write(question + " (1 — да, 0 — нет) [0]: ");
+            }
+            finally
+            {
+                Console.ForegroundColor = previousColor;
+            }
+
             var answer = Console.ReadLine()?.Trim();
 
             if (string.IsNullOrEmpty(answer) || answer == "0")
