@@ -17,6 +17,7 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "Tools\prepare-t
 if errorlevel 1 (
     echo.
     echo Tool preparation failed.
+    pause
     exit /b 1
 )
 
@@ -27,6 +28,7 @@ dotnet publish "1freq-FM.Console.csproj" -c Release -r win-x64 --self-contained 
 if errorlevel 1 (
     echo.
     echo PUBLISH FAILED
+    pause
     exit /b 1
 )
 
@@ -36,6 +38,7 @@ xcopy /E /I /Y "Tools" "dist\1freq-FM-Console\Tools" >nul
 if errorlevel 1 (
     echo.
     echo Failed to copy bundled tools into publish directory.
+    pause
     exit /b 1
 )
 
@@ -46,9 +49,12 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ^
 if errorlevel 1 (
     echo.
     echo ZIP creation failed.
+    pause
     exit /b 1
 )
 
 echo.
 echo READY: dist\1freq-FM-Console-win-x64.zip
+echo.
+pause
 exit /b 0
