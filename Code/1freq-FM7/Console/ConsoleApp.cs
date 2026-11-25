@@ -46,7 +46,7 @@ internal sealed class ConsoleApp
             Console.WriteLine("  0. Выход");
             Console.WriteLine();
 
-            Console.Write("Введите номер от 0 до 5 [0]: 
+            Console.Write("Введите номер от 0 до 5 [0]: ");
             var choice = Console.ReadLine()?.Trim();
             if (string.IsNullOrEmpty(choice))
                 choice = "0";
