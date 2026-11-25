@@ -76,7 +76,12 @@
         "usbasp",
         "arduino-isp"
       ],
-      "notes": "HEX должен быть отдельно скомпилирован и проверен для ATmega168."
+      "notes": "HEX должен быть отдельно скомпилирован и проверен для ATmega168.",
+      "fuses": {
+        "low": "62",
+        "high": "DF",
+        "extended": "F9"
+      }
     },
     {
       "id": "atmega168p",
@@ -96,7 +101,12 @@
         "usbasp",
         "arduino-isp"
       ],
-      "notes": "Варианты P и PA имеют одну сигнатуру; AVRDUDE использует профиль m168p."
+      "notes": "Варианты P и PA имеют одну сигнатуру; AVRDUDE использует профиль m168p.",
+      "fuses": {
+        "low": "62",
+        "high": "DF",
+        "extended": "F9"
+      }
     },
     {
       "id": "atmega328p",
@@ -113,7 +123,12 @@
         "usbasp",
         "arduino-isp"
       ],
-      "notes": "Основной вариант прошивки FM7."
+      "notes": "Основной вариант прошивки FM7.",
+      "fuses": {
+        "low": "62",
+        "high": "D9",
+        "extended": "FF"
+      }
     },
     {
       "id": "atmega328pb",
@@ -130,7 +145,12 @@
         "usbasp",
         "arduino-isp"
       ],
-      "notes": "Для ATmega328PB требуется отдельный проверенный HEX."
+      "notes": "Для ATmega328PB требуется отдельный проверенный HEX.",
+      "fuses": {
+        "low": "62",
+        "high": "D9",
+        "extended": "F7"
+      }
     }
   ]
 }
