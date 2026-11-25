@@ -10,6 +10,7 @@ Licenses/Source/
 
 # Runtime-generated settings and EEPROM backups
 Data/last-settings.json
+Data/eeprom.hex
 Data/app-state.json
 Backup/*
 !Backup/README.md
