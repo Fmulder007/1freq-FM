@@ -1,6 +1,5 @@
 {
-  "schemaVersion": 1,
-  "probePart": "m328p",
+  "schemaVersion": 2,
   "eepromLayout": {
     "formatId": "FM7",
     "recordSize": 16,
@@ -21,10 +20,7 @@
         "minValue": 5,
         "maxValue": 6,
         "defaultValue": 5,
-        "allowedValues": [
-          5,
-          6
-        ],
+        "allowedValues": [5, 6],
         "description": "MD — режим работы",
         "unit": ""
       },
@@ -60,97 +56,62 @@
       }
     ]
   },
-  "devices": [
-    {
-      "id": "atmega168",
+  "firmwares": {
+    "ATmega168.hex": {
       "name": "ATmega168",
-      "signature": "1E9406",
       "avrdudePart": "m168",
-      "firmwareFile": "ATmega168.hex",
       "flashBytes": 16384,
       "eepromBytes": 512,
       "eepromFormat": "FM7",
-      "enabled": true,
-      "aliases": [],
-      "supportedProgrammers": [
-        "usbasp",
-        "arduino-isp"
-      ],
-      "notes": "HEX должен быть отдельно скомпилирован и проверен для ATmega168.",
+      "supportedProgrammers": ["usbasp", "arduino-isp"],
+      "notes": "MiniCore; внутренний RC 8 МГц с делителем /8, частота ядра 1 МГц.",
       "fuses": {
         "low": "62",
         "high": "DF",
         "extended": "F9"
       }
     },
-    {
-      "id": "atmega168p",
+    "ATmega168P.hex": {
       "name": "ATmega168P / ATmega168PA",
-      "signature": "1E940B",
       "avrdudePart": "m168p",
-      "firmwareFile": "ATmega168P.hex",
       "flashBytes": 16384,
       "eepromBytes": 512,
       "eepromFormat": "FM7",
-      "enabled": true,
-      "aliases": [
-        "ATmega168P",
-        "ATmega168PA"
-      ],
-      "supportedProgrammers": [
-        "usbasp",
-        "arduino-isp"
-      ],
-      "notes": "Варианты P и PA имеют одну сигнатуру; AVRDUDE использует профиль m168p.",
+      "supportedProgrammers": ["usbasp", "arduino-isp"],
+      "notes": "MiniCore; P и PA имеют одну сигнатуру и используют один профиль.",
       "fuses": {
         "low": "62",
         "high": "DF",
         "extended": "F9"
       }
     },
-    {
-      "id": "atmega328p",
+    "ATmega328P.hex": {
       "name": "ATmega328P",
-      "signature": "1E950F",
       "avrdudePart": "m328p",
-      "firmwareFile": "ATmega328P.hex",
       "flashBytes": 32768,
       "eepromBytes": 1024,
       "eepromFormat": "FM7",
-      "enabled": true,
-      "aliases": [],
-      "supportedProgrammers": [
-        "usbasp",
-        "arduino-isp"
-      ],
-      "notes": "Основной вариант прошивки FM7.",
+      "supportedProgrammers": ["usbasp", "arduino-isp"],
+      "notes": "MiniCore; внутренний RC 8 МГц с делителем /8, частота ядра 1 МГц.",
       "fuses": {
         "low": "62",
         "high": "D9",
         "extended": "FF"
       }
     },
-    {
-      "id": "atmega328pb",
+    "ATmega328PB.hex": {
       "name": "ATmega328PB",
-      "signature": "1E9516",
       "avrdudePart": "m328pb",
-      "firmwareFile": "ATmega328PB.hex",
       "flashBytes": 32768,
       "eepromBytes": 1024,
       "eepromFormat": "FM7",
-      "enabled": true,
-      "aliases": [],
-      "supportedProgrammers": [
-        "usbasp",
-        "arduino-isp"
-      ],
-      "notes": "Для ATmega328PB требуется отдельный проверенный HEX.",
+      "supportedProgrammers": ["usbasp", "arduino-isp"],
+      "notes": "MiniCore; внутренний RC 8 МГц с делителем /8, частота ядра 1 МГц.",
       "fuses": {
         "low": "62",
         "high": "D9",
         "extended": "F7"
       }
     }
-  ]
+  }
 }
