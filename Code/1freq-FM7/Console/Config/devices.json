@@ -12,7 +12,8 @@
         "maxValue": 110000000,
         "defaultValue": 27007840,
         "allowedValues": [],
-        "description": "XT — опорная частота кварца Si5351, Гц"
+        "description": "XT — опорная частота кварца Si5351",
+        "unit": "Гц"
       },
       {
         "tag": "MD",
@@ -24,7 +25,8 @@
           5,
           6
         ],
-        "description": "MD — режим работы (5 или 6)"
+        "description": "MD — режим работы",
+        "unit": ""
       },
       {
         "tag": "F1",
@@ -33,7 +35,8 @@
         "maxValue": 300000000,
         "defaultValue": 2000000,
         "allowedValues": [],
-        "description": "F1 — частота при минимальном напряжении PC0, Гц"
+        "description": "F1 — частота при минимальном напряжении PC0",
+        "unit": "Гц"
       },
       {
         "tag": "F2",
@@ -42,7 +45,8 @@
         "maxValue": 300000000,
         "defaultValue": 1000000,
         "allowedValues": [],
-        "description": "F2 — частота при максимальном напряжении PC0, Гц"
+        "description": "F2 — частота при максимальном напряжении PC0",
+        "unit": "Гц"
       },
       {
         "tag": "ST",
@@ -51,7 +55,8 @@
         "maxValue": 1024,
         "defaultValue": 0,
         "allowedValues": [],
-        "description": "ST — количество шагов (0 означает 1024)"
+        "description": "ST — количество шагов (0 означает 1024 шага)",
+        "unit": ""
       }
     ]
   },
