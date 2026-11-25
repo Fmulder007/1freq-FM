@@ -12,10 +12,10 @@ $Default = @{
 }
 
 $Limits = @{
-    XTMin = [uint64]7000000
-    XTMax = [uint64]33000000
+    XTMin = [uint64]5000000
+    XTMax = [uint64]110000000
     FMin  = [uint64]15000
-    FMax  = [uint64]150000000
+    FMax  = [uint64]300000000
     STMin = [uint64]0
     STMax = [uint64]1024
 }

@@ -8,8 +8,8 @@
       {
         "tag": "XT",
         "address": 0,
-        "minValue": 7000000,
-        "maxValue": 33000000,
+        "minValue": 5000000,
+        "maxValue": 110000000,
         "defaultValue": 27007840,
         "allowedValues": [],
         "description": "XT — опорная частота кварца Si5351, Гц"
@@ -20,14 +20,17 @@
         "minValue": 5,
         "maxValue": 6,
         "defaultValue": 5,
-        "allowedValues": [5, 6],
+        "allowedValues": [
+          5,
+          6
+        ],
         "description": "MD — режим работы (5 или 6)"
       },
       {
         "tag": "F1",
         "address": 32,
         "minValue": 15000,
-        "maxValue": 150000000,
+        "maxValue": 300000000,
         "defaultValue": 2000000,
         "allowedValues": [],
         "description": "F1 — частота при минимальном напряжении PC0, Гц"
@@ -36,7 +39,7 @@
         "tag": "F2",
         "address": 48,
         "minValue": 15000,
-        "maxValue": 150000000,
+        "maxValue": 300000000,
         "defaultValue": 1000000,
         "allowedValues": [],
         "description": "F2 — частота при максимальном напряжении PC0, Гц"
@@ -64,7 +67,10 @@
       "eepromFormat": "FM7",
       "enabled": true,
       "aliases": [],
-      "supportedProgrammers": ["usbasp", "arduino-isp"],
+      "supportedProgrammers": [
+        "usbasp",
+        "arduino-isp"
+      ],
       "notes": "HEX должен быть отдельно скомпилирован и проверен для ATmega168."
     },
     {
@@ -77,8 +83,14 @@
       "eepromBytes": 512,
       "eepromFormat": "FM7",
       "enabled": true,
-      "aliases": ["ATmega168P", "ATmega168PA"],
-      "supportedProgrammers": ["usbasp", "arduino-isp"],
+      "aliases": [
+        "ATmega168P",
+        "ATmega168PA"
+      ],
+      "supportedProgrammers": [
+        "usbasp",
+        "arduino-isp"
+      ],
       "notes": "Варианты P и PA имеют одну сигнатуру; AVRDUDE использует профиль m168p."
     },
     {
@@ -92,7 +104,10 @@
       "eepromFormat": "FM7",
       "enabled": true,
       "aliases": [],
-      "supportedProgrammers": ["usbasp", "arduino-isp"],
+      "supportedProgrammers": [
+        "usbasp",
+        "arduino-isp"
+      ],
       "notes": "Основной вариант прошивки FM7."
     },
     {
@@ -106,7 +121,10 @@
       "eepromFormat": "FM7",
       "enabled": true,
       "aliases": [],
-      "supportedProgrammers": ["usbasp", "arduino-isp"],
+      "supportedProgrammers": [
+        "usbasp",
+        "arduino-isp"
+      ],
       "notes": "Для ATmega328PB требуется отдельный проверенный HEX."
     }
   ]

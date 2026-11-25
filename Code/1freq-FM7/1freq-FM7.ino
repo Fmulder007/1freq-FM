@@ -48,14 +48,12 @@
 #define DEFAULT_F2               1000000UL
 #define DEFAULT_STEPS            0UL
 
-// Безопасные границы для арифметики выбранной версии библиотеки GSSx11.
-// XT допускает кварцы, применяемые в проекте, включая 27.007840 и 32 MHz.
-#define MIN_XTAL_FREQ            7000000UL
-#define MAX_XTAL_FREQ           33000000UL
+// Проектные границы параметров FM7, принятые по результатам практической проверки.
+#define MIN_XTAL_FREQ            5000000UL
+#define MAX_XTAL_FREQ          110000000UL
 
-// При VCO=400...600 MHz и используемом R-divider:
-#define MIN_OUTPUT_FREQ             15000UL
-#define MAX_OUTPUT_FREQ        150000000UL
+#define MIN_OUTPUT_FREQ            15000UL
+#define MAX_OUTPUT_FREQ        300000000UL
 
 // Общий измерительный тракт в обоих режимах.
 #define ADC_SAMPLES                    4
