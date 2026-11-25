@@ -7,6 +7,8 @@ using Microsoft.Win32;
 
 internal sealed class ConsoleApp
 {
+    private static readonly object AvrdudeOutputLock = new();
+
     private readonly string _root;
     private readonly FirmwareCatalog _catalog;
     private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
@@ -723,22 +725,48 @@ internal sealed class ConsoleApp
         using var process = new Process { StartInfo = startInfo };
         process.Start();
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
+        // AVRDUDE writes its progress to stderr. Drain both redirected streams
+        // concurrently and forward each received block immediately, while also
+        // retaining the complete output for the operation result.
+        var stdoutTask = ForwardAvrdudeStreamAsync(process.StandardOutput, Console.Out);
+        var stderrTask = ForwardAvrdudeStreamAsync(process.StandardError, Console.Error);
+
         await process.WaitForExitAsync();
 
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
         var output = (stdout + Environment.NewLine + stderr).Trim();
 
-        if (!string.IsNullOrWhiteSpace(output))
-            Console.WriteLine(output);
-
         if (process.ExitCode == 0)
             return new AvrdudeResult(true, 0, output);
 
         WriteError("AVRDUDE завершился с кодом " + process.ExitCode + ".");
         return new AvrdudeResult(false, process.ExitCode, output);
+    }
+
+    private static async Task<string> ForwardAvrdudeStreamAsync(StreamReader reader, TextWriter destination)
+    {
+        var captured = new StringBuilder();
+        var buffer = new char[256];
+
+        while (true)
+        {
+            var count = await reader.ReadAsync(buffer, 0, buffer.Length);
+            if (count == 0)
+                break;
+
+            captured.Append(buffer, 0, count);
+
+            // stdout and stderr can arrive simultaneously. Keep each block
+            // intact so the two readers cannot overwrite or interleave writes.
+            lock (AvrdudeOutputLock)
+            {
+                destination.Write(buffer, 0, count);
+                destination.Flush();
+            }
+        }
+
+        return captured.ToString();
     }
 
     private string? FindAvrdudeExecutable()
