@@ -8,7 +8,7 @@ using Microsoft.Win32;
 internal sealed class ConsoleApp
 {
     private readonly string _root;
-    private readonly DeviceCatalog _catalog;
+    private readonly FirmwareCatalog _catalog;
     private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
     private string _preferredProgrammerId = "usbasp";
     private string? _preferredPort;
@@ -20,7 +20,7 @@ internal sealed class ConsoleApp
     private string ExtraAvrdudeConfig => Path.Combine(ConfigDirectory, "avrdude-extra.conf");
     private string SettingsPath => Path.Combine(DataDirectory, "last-settings.json");
     private string PreferencesPath => Path.Combine(DataDirectory, "app-state.json");
-    private string EepromHexPath => Path.Combine(FirmwareDirectory, "eeprom.hex");
+    private string EepromHexPath => Path.Combine(DataDirectory, "eeprom.hex");
 
     public ConsoleApp()
     {
@@ -39,15 +39,14 @@ internal sealed class ConsoleApp
         {
             Console.WriteLine();
             Console.WriteLine("  1. Создать / изменить настройки EEPROM");
-            Console.WriteLine("  2. Проверить подключение и определить МК");
-            Console.WriteLine("  3. Прошить микросинтезатор (Flash + EEPROM)");
-            Console.WriteLine("  4. Записать только EEPROM");
-            Console.WriteLine("  5. Считать EEPROM в резервную копию");
-            Console.WriteLine("  6. Настроить USB-драйвер (Zadig)");
+            Console.WriteLine("  2. Прошить микросинтезатор (Flash + EEPROM)");
+            Console.WriteLine("  3. Записать только EEPROM");
+            Console.WriteLine("  4. Считать EEPROM в резервную копию");
+            Console.WriteLine("  5. Настроить USB-драйвер (Zadig)");
             Console.WriteLine("  0. Выход");
             Console.WriteLine();
 
-            Console.Write("Введите номер от 0 до 6 [0]: ");
+            Console.Write("Введите номер от 0 до 5 [0]: 
             var choice = Console.ReadLine()?.Trim();
             if (string.IsNullOrEmpty(choice))
                 choice = "0";
@@ -60,18 +59,15 @@ internal sealed class ConsoleApp
                         ConfigureEeprom();
                         break;
                     case "2":
-                        await CheckTargetAsync();
-                        break;
-                    case "3":
                         await FlashTargetAsync();
                         break;
-                    case "4":
+                    case "3":
                         await WriteEepromOnlyAsync();
                         break;
-                    case "5":
+                    case "4":
                         await ReadEepromAsync();
                         break;
-                    case "6":
+                    case "5":
                         LaunchZadig();
                         break;
                     case "0":
@@ -108,7 +104,7 @@ internal sealed class ConsoleApp
     private void ShowToolStatus()
     {
         Console.WriteLine();
-        Console.WriteLine("Каталог МК: " + _catalog.Devices.Count + " профиля(ей)");
+        Console.WriteLine("Каталог МК: " + _catalog.Firmwares.Count + " профиля(ей)");
         Console.WriteLine("AVRDUDE: " + (FindAvrdudeExecutable() is null ? "не найден" : "найден"));
         Console.WriteLine("Zadig: " + (File.Exists(Path.Combine(_root, "Tools", "Zadig.exe")) ? "найден" : "не найден"));
         Console.WriteLine("Последний программатор: " + (_preferredProgrammerId == "arduino-isp" ? "Arduino Nano ISP" : "USBasp"));
@@ -170,7 +166,6 @@ internal sealed class ConsoleApp
             throw new InvalidDataException(error);
 
         Directory.CreateDirectory(DataDirectory);
-        Directory.CreateDirectory(FirmwareDirectory);
 
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(values, _jsonOptions), new UTF8Encoding(false));
         File.WriteAllText(EepromHexPath, EepromHex.Build(_catalog.EepromLayout, values), Encoding.ASCII);
@@ -205,42 +200,57 @@ internal sealed class ConsoleApp
             Console.WriteLine($"  {item.Key}={item.Value}");
     }
 
-    private async Task CheckTargetAsync()
+    private FirmwareProfile? SelectFirmware()
     {
-        var programmer = SelectProgrammer();
-        if (programmer is null)
-            return;
+        var items = _catalog.Firmwares
+            .Where(item => item.Value.Enabled)
+            .ToList();
 
-        var device = await ProbeTargetAsync(programmer);
-        if (device is null)
-            return;
+        if (items.Count == 0)
+        {
+            WriteError("В Config/devices.json нет включённых профилей прошивок.");
+            return null;
+        }
 
         Console.WriteLine();
-        WriteSuccess("Микроконтроллер распознан.");
-        PrintDevice(device);
-        Console.WriteLine("Программатор: " + programmer.DisplayName);
+        Console.WriteLine("Выберите микроконтроллер:");
+        for (var i = 0; i < items.Count; i++)
+            Console.WriteLine($"  {i + 1}. {items[i].Value.Name} — {items[i].Key}");
+        Console.WriteLine("  0. Назад");
+        Console.Write($"Введите номер от 0 до {items.Count} [0]: ");
+
+        var input = Console.ReadLine()?.Trim();
+        if (string.IsNullOrEmpty(input) || input == "0")
+            return null;
+
+        if (!int.TryParse(input, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ||
+            index < 1 || index > items.Count)
+        {
+            WriteError("Выбран неверный номер микроконтроллера.");
+            return null;
+        }
+
+        return items[index - 1].Value;
     }
 
     private async Task FlashTargetAsync()
     {
+        var firmware = SelectFirmware();
+        if (firmware is null)
+            return;
+
         var programmer = SelectProgrammer();
-        if (programmer is null)
+        if (programmer is null || !CheckProgrammerAllowed(firmware, programmer))
             return;
 
-        var device = await ProbeTargetAsync(programmer);
-        if (device is null || !CheckProgrammerAllowed(device, programmer))
-            return;
-
-        var firmwarePath = Path.Combine(FirmwareDirectory, device.FirmwareFile);
+        var firmwarePath = Path.Combine(FirmwareDirectory, firmware.FileName);
         if (!File.Exists(firmwarePath))
         {
-            WriteError($"Для {device.Name} пока нет прошивки.");
-            Console.WriteLine("Ожидаемый файл: " + firmwarePath);
-            Console.WriteLine("Скомпилируйте и проверьте HEX отдельно, затем положите его в Firmware.");
+            WriteError($"Не найден HEX для {firmware.Name}: {firmwarePath}");
             return;
         }
 
-        var flashEnd = IntelHexInspector.ValidateFile(firmwarePath, device.FlashBytes);
+        var flashEnd = IntelHexInspector.ValidateFile(firmwarePath, firmware.FlashBytes);
         var settings = ReadSettings();
         if (settings is null)
         {
@@ -249,15 +259,15 @@ internal sealed class ConsoleApp
         }
 
         SaveSettingsAndHex(settings);
-        var writeFuses = SelectFuseProgramming(device);
+        var writeFuses = SelectFuseProgramming(firmware);
         if (writeFuses is null)
             return;
 
-        var backupPath = NewBackupPath(device, "before-flash");
+        var backupPath = NewBackupPath(firmware, "before-flash");
 
         Console.WriteLine();
-        PrintDevice(device);
-        Console.WriteLine($"Размер HEX: адреса 0…{flashEnd - 1}, Flash МК: {device.FlashBytes} байт.");
+        PrintFirmware(firmware);
+        Console.WriteLine($"Размер HEX: адреса 0…{flashEnd - 1}, Flash МК: {firmware.FlashBytes} байт.");
         Console.WriteLine("Перед записью Flash AVRDUDE выполнит Chip Erase. Содержимое EEPROM предварительно сохраняется.");
         Console.WriteLine("После прошивки будут записаны новые параметры FM7.");
         Console.WriteLine();
@@ -268,7 +278,7 @@ internal sealed class ConsoleApp
 
         Console.WriteLine();
         Console.WriteLine("1/5. Считывание EEPROM перед стиранием...");
-        if (!await RunMemoryOperationAsync(device, programmer, "eeprom", "r", backupPath, "i"))
+        if (!await RunMemoryOperationAsync(firmware, programmer, "eeprom", "r", backupPath, "i"))
         {
             WriteError("Не удалось сохранить EEPROM. Прошивка отменена.");
             return;
@@ -277,8 +287,8 @@ internal sealed class ConsoleApp
         if (writeFuses)
         {
             Console.WriteLine("2/5. Запись и проверка Fuse-битов...");
-            if (!await RunFuseSetAsync(device, programmer, "w") ||
-                !await RunFuseSetAsync(device, programmer, "v"))
+            if (!await RunFuseSetAsync(firmware, programmer, "w") ||
+                !await RunFuseSetAsync(firmware, programmer, "v"))
             {
                 WriteError("Не удалось записать или проверить Fuse-биты. Запись Flash отменена; резервная копия EEPROM сохранена.");
                 return;
@@ -286,26 +296,26 @@ internal sealed class ConsoleApp
         }
         else
         {
-            Console.WriteLine("2/5. Fuse-биты не изменяются (выбран режим «только HEX»).");
+            Console.WriteLine("2/5. Fuse-биты не изменяются.");
         }
 
         Console.WriteLine("3/5. Запись Flash...");
-        if (!await RunMemoryOperationAsync(device, programmer, "flash", "w", firmwarePath, "i"))
+        if (!await RunMemoryOperationAsync(firmware, programmer, "flash", "w", firmwarePath, "i"))
         {
             WriteError("Запись Flash завершилась ошибкой. Резервная копия EEPROM сохранена.");
             return;
         }
 
         Console.WriteLine("4/5. Проверка Flash...");
-        if (!await RunMemoryOperationAsync(device, programmer, "flash", "v", firmwarePath, "i"))
+        if (!await RunMemoryOperationAsync(firmware, programmer, "flash", "v", firmwarePath, "i"))
         {
             WriteError("Проверка Flash не пройдена. EEPROM не изменялась после неудачной проверки.");
             return;
         }
 
         Console.WriteLine("5/5. Запись и проверка EEPROM...");
-        if (!await RunMemoryOperationAsync(device, programmer, "eeprom", "w", EepromHexPath, "i") ||
-            !await RunMemoryOperationAsync(device, programmer, "eeprom", "v", EepromHexPath, "i"))
+        if (!await RunMemoryOperationAsync(firmware, programmer, "eeprom", "w", EepromHexPath, "i") ||
+            !await RunMemoryOperationAsync(firmware, programmer, "eeprom", "v", EepromHexPath, "i"))
         {
             WriteError("Не удалось записать или проверить EEPROM. Резервная копия сохранена.");
             return;
@@ -316,16 +326,29 @@ internal sealed class ConsoleApp
             : "Flash и настройки микросинтезатора записаны и проверены; Fuse-биты не изменялись.");
     }
 
-    private bool? SelectFuseProgramming(DeviceProfile device)
+    private bool? SelectFuseProgramming(FirmwareProfile firmware)
     {
+        var fuses = firmware.Fuses;
+        var available = new List<(string Name, string? Value)>
+        {
+            ("LFUSE", fuses?.Low),
+            ("HFUSE", fuses?.High),
+            ("EFUSE", fuses?.Extended)
+        }.Where(item => !string.IsNullOrWhiteSpace(item.Value)).ToList();
+
+        if (available.Count == 0)
+        {
+            Console.WriteLine("В профиле этого МК fuse-значения не заданы. Fuse-биты не изменяются.");
+            return false;
+        }
+
         Console.WriteLine();
-        Console.WriteLine("Настройки Fuse-битов для " + device.Name + ":");
-        Console.WriteLine($"  LFUSE = 0x{device.Fuses.Low.ToUpperInvariant()}");
-        Console.WriteLine($"  HFUSE = 0x{device.Fuses.High.ToUpperInvariant()}");
-        Console.WriteLine($"  EFUSE = 0x{device.Fuses.Extended.ToUpperInvariant()}");
+        Console.WriteLine("Fuse-биты из профиля " + firmware.Name + ":");
+        foreach (var item in available)
+            Console.WriteLine($"  {item.Name} = 0x{item.Value!.ToUpperInvariant()}");
         Console.WriteLine();
-        Console.WriteLine("  1. Прошить HEX и установить Fuse-биты из профиля");
-        Console.WriteLine("  2. Прошить только HEX, не изменяя Fuse-биты");
+        Console.WriteLine("  1. Прошить HEX и записать эти Fuse-биты");
+        Console.WriteLine("  2. Прошить только HEX, не меняя Fuse-биты");
         Console.WriteLine("  0. Назад");
         Console.Write("Введите 0, 1 или 2 [2]: ");
 
@@ -349,17 +372,21 @@ internal sealed class ConsoleApp
     }
 
     private async Task<bool> RunFuseSetAsync(
-        DeviceProfile device,
+        FirmwareProfile firmware,
         ProgrammerSelection programmer,
         string operation)
     {
-        var args = BuildBaseArguments(device.AvrdudePart, programmer);
-        foreach (var item in new[]
+        var args = BuildBaseArguments(firmware.AvrdudePart, programmer);
+        var fuses = firmware.Fuses;
+
+        var writes = new List<(string Memory, string? Value)>
         {
-            (Memory: "lfuse", Value: device.Fuses.Low),
-            (Memory: "hfuse", Value: device.Fuses.High),
-            (Memory: "efuse", Value: device.Fuses.Extended)
-        })
+            ("lfuse", fuses?.Low),
+            ("hfuse", fuses?.High),
+            ("efuse", fuses?.Extended)
+        };
+
+        foreach (var item in writes.Where(item => !string.IsNullOrWhiteSpace(item.Value)))
         {
             args.Add("-U");
             args.Add($"{item.Memory}:{operation}:0x{item.Value}:m");
@@ -371,12 +398,12 @@ internal sealed class ConsoleApp
 
     private async Task WriteEepromOnlyAsync()
     {
-        var programmer = SelectProgrammer();
-        if (programmer is null)
+        var firmware = SelectFirmware();
+        if (firmware is null)
             return;
 
-        var device = await ProbeTargetAsync(programmer);
-        if (device is null || !CheckProgrammerAllowed(device, programmer))
+        var programmer = SelectProgrammer();
+        if (programmer is null || !CheckProgrammerAllowed(firmware, programmer))
             return;
 
         var settings = ReadSettings();
@@ -387,28 +414,29 @@ internal sealed class ConsoleApp
         }
 
         SaveSettingsAndHex(settings);
-        var backupPath = NewBackupPath(device, "before-eeprom-write");
+        var backupPath = NewBackupPath(firmware, "before-eeprom-write");
 
         Console.WriteLine();
+        PrintFirmware(firmware);
         PrintSettings(settings);
         Console.WriteLine("Текущая EEPROM будет сохранена в: " + backupPath);
 
         if (!Confirm("Записать новые настройки EEPROM?"))
             return;
 
-        if (!await RunMemoryOperationAsync(device, programmer, "eeprom", "r", backupPath, "i"))
+        if (!await RunMemoryOperationAsync(firmware, programmer, "eeprom", "r", backupPath, "i"))
         {
             WriteError("Не удалось сохранить текущую EEPROM. Запись отменена.");
             return;
         }
 
-        if (!await RunMemoryOperationAsync(device, programmer, "eeprom", "w", EepromHexPath, "i"))
+        if (!await RunMemoryOperationAsync(firmware, programmer, "eeprom", "w", EepromHexPath, "i"))
         {
             WriteError("Ошибка записи EEPROM. Резервная копия сохранена.");
             return;
         }
 
-        if (!await RunMemoryOperationAsync(device, programmer, "eeprom", "v", EepromHexPath, "i"))
+        if (!await RunMemoryOperationAsync(firmware, programmer, "eeprom", "v", EepromHexPath, "i"))
         {
             WriteError("Проверка EEPROM не пройдена.");
             return;
@@ -419,19 +447,20 @@ internal sealed class ConsoleApp
 
     private async Task ReadEepromAsync()
     {
+        var firmware = SelectFirmware();
+        if (firmware is null)
+            return;
+
         var programmer = SelectProgrammer();
-        if (programmer is null)
+        if (programmer is null || !CheckProgrammerAllowed(firmware, programmer))
             return;
 
-        var device = await ProbeTargetAsync(programmer);
-        if (device is null || !CheckProgrammerAllowed(device, programmer))
-            return;
-
-        var backupPath = NewBackupPath(device, "read");
+        var backupPath = NewBackupPath(firmware, "read");
         Console.WriteLine();
+        PrintFirmware(firmware);
         Console.WriteLine("Файл резервной копии: " + backupPath);
 
-        if (!await RunMemoryOperationAsync(device, programmer, "eeprom", "r", backupPath, "i"))
+        if (!await RunMemoryOperationAsync(firmware, programmer, "eeprom", "r", backupPath, "i"))
         {
             WriteError("Не удалось прочитать EEPROM.");
             return;
@@ -440,71 +469,23 @@ internal sealed class ConsoleApp
         WriteSuccess("EEPROM сохранена: " + backupPath);
     }
 
-    private bool CheckProgrammerAllowed(DeviceProfile device, ProgrammerSelection programmer)
+    private bool CheckProgrammerAllowed(FirmwareProfile firmware, ProgrammerSelection programmer)
     {
-        if (device.SupportedProgrammers.Contains(programmer.Id, StringComparer.OrdinalIgnoreCase))
+        if (firmware.SupportedProgrammers.Contains(programmer.Id, StringComparer.OrdinalIgnoreCase))
             return true;
 
-        WriteError($"Программатор {programmer.DisplayName} не разрешён в профиле {device.Name}.");
+        WriteError($"Программатор {programmer.DisplayName} не разрешён в профиле {firmware.Name}.");
         return false;
     }
 
-    private void PrintDevice(DeviceProfile device)
+    private static void PrintFirmware(FirmwareProfile firmware)
     {
-        Console.WriteLine($"МК: {device.Name}");
-        Console.WriteLine($"Сигнатура: {device.Signature.ToUpperInvariant()}");
-        Console.WriteLine($"AVRDUDE part: {device.AvrdudePart}");
-        Console.WriteLine($"Flash: {device.FlashBytes} байт; EEPROM: {device.EepromBytes} байт");
-        if (device.Aliases.Count > 0)
-            Console.WriteLine("Варианты: " + string.Join(", ", device.Aliases));
-        if (!string.IsNullOrWhiteSpace(device.Notes))
-            Console.WriteLine("Примечание: " + device.Notes);
-    }
-
-    private async Task<DeviceProfile?> ProbeTargetAsync(ProgrammerSelection programmer)
-    {
-        var signaturePath = Path.Combine(Path.GetTempPath(), "1freq-signature-" + Guid.NewGuid().ToString("N") + ".bin");
-
-        try
-        {
-            var args = BuildBaseArguments(_catalog.ProbePart, programmer);
-            args.Add("-F");
-            args.Add("-U");
-            args.Add($"signature:r:{signaturePath}:r");
-
-            Console.WriteLine();
-            Console.WriteLine("Проверка связи и чтение сигнатуры...");
-            var result = await RunAvrdudeAsync(args);
-
-            if (!result.Success || !File.Exists(signaturePath))
-            {
-                WriteError("Не удалось получить сигнатуру. Проверьте питание, кабель, RESET, ISP-подключение и выбранный программатор.");
-                return null;
-            }
-
-            var signatureBytes = File.ReadAllBytes(signaturePath);
-            if (signatureBytes.Length < 3)
-            {
-                WriteError("AVRDUDE вернул неполную сигнатуру.");
-                return null;
-            }
-
-            var signature = Convert.ToHexString(signatureBytes.Take(3).ToArray());
-            var device = _catalog.Devices.FirstOrDefault(d =>
-                d.Enabled && string.Equals(d.Signature, signature, StringComparison.OrdinalIgnoreCase));
-
-            if (device is null)
-            {
-                WriteError($"Неизвестная сигнатура МК: {signature}. Запись Flash и EEPROM запрещена.");
-                return null;
-            }
-
-            return device;
-        }
-        finally
-        {
-            try { if (File.Exists(signaturePath)) File.Delete(signaturePath); } catch { }
-        }
+        Console.WriteLine($"МК: {firmware.Name}");
+        Console.WriteLine($"HEX: {firmware.FileName}");
+        Console.WriteLine($"AVRDUDE part: {firmware.AvrdudePart}");
+        Console.WriteLine($"Flash: {firmware.FlashBytes} байт; EEPROM: {firmware.EepromBytes} байт");
+        if (!string.IsNullOrWhiteSpace(firmware.Notes))
+            Console.WriteLine("Примечание: " + firmware.Notes);
     }
 
     private ProgrammerSelection? SelectProgrammer()
@@ -663,6 +644,7 @@ internal sealed class ConsoleApp
         }
 
         args.Add("-N");
+        args.Add("-F"); // Пользователь сам выбирает профиль; сверку сигнатуры не выполняем.
         args.Add("-p");
         args.Add(part);
         args.Add("-c");
@@ -694,14 +676,14 @@ internal sealed class ConsoleApp
     }
 
     private async Task<bool> RunMemoryOperationAsync(
-        DeviceProfile device,
+        FirmwareProfile firmware,
         ProgrammerSelection programmer,
         string memory,
         string operation,
         string filePath,
         string format)
     {
-        var args = BuildBaseArguments(device.AvrdudePart, programmer);
+        var args = BuildBaseArguments(firmware.AvrdudePart, programmer);
         args.Add("-U");
         args.Add($"{memory}:{operation}:{filePath}:{format}");
         var result = await RunAvrdudeAsync(args);
@@ -772,11 +754,11 @@ internal sealed class ConsoleApp
         return Directory.GetFiles(directory, "avrdude.conf", SearchOption.AllDirectories).FirstOrDefault();
     }
 
-    private string NewBackupPath(DeviceProfile device, string suffix)
+    private string NewBackupPath(FirmwareProfile firmware, string suffix)
     {
         Directory.CreateDirectory(BackupDirectory);
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
-        return Path.Combine(BackupDirectory, $"{stamp}_{device.Id}_{suffix}.hex");
+        return Path.Combine(BackupDirectory, $"{stamp}_{Path.GetFileNameWithoutExtension(firmware.FileName)}_{suffix}.hex");
     }
 
     private void LaunchZadig()
