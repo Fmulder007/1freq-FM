@@ -25,6 +25,7 @@ internal sealed class EepromParameter
     public uint DefaultValue { get; set; }
     public List<uint> AllowedValues { get; set; } = new();
     public string Description { get; set; } = "";
+    public string Unit { get; set; } = "";
 }
 
 internal sealed class DeviceProfile
