@@ -47,8 +47,10 @@ internal sealed class ConsoleApp
             Console.WriteLine("  0. Выход");
             Console.WriteLine();
 
-            Console.Write("Выберите действие: ");
+            Console.Write("Введите номер от 0 до 6 [0]: ");
             var choice = Console.ReadLine()?.Trim();
+            if (string.IsNullOrEmpty(choice))
+                choice = "0";
 
             try
             {
@@ -131,11 +133,11 @@ internal sealed class ConsoleApp
 
             while (true)
             {
-                var allowed = parameter.AllowedValues.Count > 0
-                    ? " Допустимо: " + string.Join(", ", parameter.AllowedValues) + "."
-                    : $" Диапазон: {parameter.MinValue} - {parameter.MaxValue}.";
+                var constraint = parameter.AllowedValues.Count > 0
+                    ? FormatAllowedValues(parameter.AllowedValues)
+                    : $"от {parameter.MinValue}{FormatUnit(parameter.Unit)} до {parameter.MaxValue}{FormatUnit(parameter.Unit)}";
 
-                Console.Write($"{parameter.Description} [{oldValue}].{allowed} ");
+                Console.Write($"{parameter.Description}, {constraint} [{oldValue}]: ");
                 var input = Console.ReadLine()?.Trim();
 
                 if (string.IsNullOrEmpty(input))
@@ -435,10 +437,10 @@ internal sealed class ConsoleApp
     {
         Console.WriteLine();
         Console.WriteLine("Выберите программатор:");
-        Console.WriteLine("  1. USBasp");
-        Console.WriteLine("  2. Arduino Nano с заранее загруженной ArduinoISP");
+        Console.WriteLine("  1 - USBasp");
+        Console.WriteLine("  2 - Arduino Nano с заранее загруженной ArduinoISP");
         var defaultChoice = _preferredProgrammerId == "arduino-isp" ? "2" : "1";
-        Console.Write($"Вариант [{defaultChoice}]: ");
+        Console.Write($"Введите 1 или 2 [{defaultChoice}]: ");
 
         var choice = Console.ReadLine()?.Trim();
         if (string.IsNullOrEmpty(choice))
@@ -478,14 +480,14 @@ internal sealed class ConsoleApp
                 Console.WriteLine($"  {i + 1}. {ports[i]}");
 
             Console.Write(string.IsNullOrWhiteSpace(preferredPort)
-                ? "Номер из списка или имя порта (например COM5): "
-                : $"Номер из списка или имя порта [{preferredPort}]: ");
+                ? $"Введите номер от 1 до {ports.Count} или имя COM-порта: "
+                : $"Введите номер от 1 до {ports.Count} или имя COM-порта [{preferredPort}]: ");
         }
         else
         {
             Console.Write(string.IsNullOrWhiteSpace(preferredPort)
-                ? "COM-порт Nano (например COM5): "
-                : $"COM-порт Nano [{preferredPort}]: ");
+                ? "Введите COM-порт Nano (например COM5): "
+                : $"Введите COM-порт Nano (например COM5) [{preferredPort}]: ");
         }
 
         var input = Console.ReadLine()?.Trim();
@@ -712,8 +714,38 @@ internal sealed class ConsoleApp
 
     private static bool Confirm(string question)
     {
-        Console.Write(question + " Введите ДА для подтверждения: ");
-        return string.Equals(Console.ReadLine()?.Trim(), "ДА", StringComparison.OrdinalIgnoreCase);
+        while (true)
+        {
+            Console.Write(question + " ДА или НЕТ [НЕТ]: ");
+            var answer = Console.ReadLine()?.Trim();
+
+            if (string.IsNullOrEmpty(answer) ||
+                string.Equals(answer, "НЕТ", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (string.Equals(answer, "ДА", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            WriteError("Введите ДА или НЕТ.");
+        }
+    }
+
+    private static string FormatAllowedValues(IReadOnlyList<uint> values)
+    {
+        var items = values.Select(value => value.ToString(CultureInfo.InvariantCulture)).ToArray();
+
+        return items.Length switch
+        {
+            0 => "",
+            1 => items[0],
+            2 => $"{items[0]} или {items[1]}",
+            _ => string.Join(", ", items[..^1]) + " или " + items[^1]
+        };
+    }
+
+    private static string FormatUnit(string? unit)
+    {
+        return string.IsNullOrWhiteSpace(unit) ? "" : " " + unit;
     }
 
     private static string QuoteArgument(string value)
