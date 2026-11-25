@@ -249,6 +249,10 @@ internal sealed class ConsoleApp
         }
 
         SaveSettingsAndHex(settings);
+        var writeFuses = SelectFuseProgramming(device);
+        if (writeFuses is null)
+            return;
+
         var backupPath = NewBackupPath(device, "before-flash");
 
         Console.WriteLine();
@@ -263,28 +267,43 @@ internal sealed class ConsoleApp
             return;
 
         Console.WriteLine();
-        Console.WriteLine("1/4. Считывание EEPROM перед стиранием...");
+        Console.WriteLine("1/5. Считывание EEPROM перед стиранием...");
         if (!await RunMemoryOperationAsync(device, programmer, "eeprom", "r", backupPath, "i"))
         {
             WriteError("Не удалось сохранить EEPROM. Прошивка отменена.");
             return;
         }
 
-        Console.WriteLine("2/4. Запись Flash...");
+        if (writeFuses)
+        {
+            Console.WriteLine("2/5. Запись и проверка Fuse-битов...");
+            if (!await RunFuseSetAsync(device, programmer, "w") ||
+                !await RunFuseSetAsync(device, programmer, "v"))
+            {
+                WriteError("Не удалось записать или проверить Fuse-биты. Запись Flash отменена; резервная копия EEPROM сохранена.");
+                return;
+            }
+        }
+        else
+        {
+            Console.WriteLine("2/5. Fuse-биты не изменяются (выбран режим «только HEX»).");
+        }
+
+        Console.WriteLine("3/5. Запись Flash...");
         if (!await RunMemoryOperationAsync(device, programmer, "flash", "w", firmwarePath, "i"))
         {
             WriteError("Запись Flash завершилась ошибкой. Резервная копия EEPROM сохранена.");
             return;
         }
 
-        Console.WriteLine("3/4. Проверка Flash...");
+        Console.WriteLine("4/5. Проверка Flash...");
         if (!await RunMemoryOperationAsync(device, programmer, "flash", "v", firmwarePath, "i"))
         {
             WriteError("Проверка Flash не пройдена. EEPROM не изменялась после неудачной проверки.");
             return;
         }
 
-        Console.WriteLine("4/4. Запись и проверка EEPROM...");
+        Console.WriteLine("5/5. Запись и проверка EEPROM...");
         if (!await RunMemoryOperationAsync(device, programmer, "eeprom", "w", EepromHexPath, "i") ||
             !await RunMemoryOperationAsync(device, programmer, "eeprom", "v", EepromHexPath, "i"))
         {
@@ -292,7 +311,62 @@ internal sealed class ConsoleApp
             return;
         }
 
-        WriteSuccess("Прошивка и настройки микросинтезатора записаны и проверены.");
+        WriteSuccess(writeFuses
+            ? "Fuse-биты, Flash и настройки микросинтезатора записаны и проверены."
+            : "Flash и настройки микросинтезатора записаны и проверены; Fuse-биты не изменялись.");
+    }
+
+    private bool? SelectFuseProgramming(DeviceProfile device)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Настройки Fuse-битов для " + device.Name + ":");
+        Console.WriteLine($"  LFUSE = 0x{device.Fuses.Low.ToUpperInvariant()}");
+        Console.WriteLine($"  HFUSE = 0x{device.Fuses.High.ToUpperInvariant()}");
+        Console.WriteLine($"  EFUSE = 0x{device.Fuses.Extended.ToUpperInvariant()}");
+        Console.WriteLine();
+        Console.WriteLine("  1. Прошить HEX и установить Fuse-биты из профиля");
+        Console.WriteLine("  2. Прошить только HEX, не изменяя Fuse-биты");
+        Console.WriteLine("  0. Назад");
+        Console.Write("Введите 0, 1 или 2 [2]: ");
+
+        var choice = Console.ReadLine()?.Trim();
+        if (string.IsNullOrEmpty(choice))
+            choice = "2";
+
+        return choice switch
+        {
+            "1" => true,
+            "2" => false,
+            "0" => null,
+            _ => InvalidFuseChoice()
+        };
+    }
+
+    private static bool? InvalidFuseChoice()
+    {
+        WriteError("Неизвестный вариант. Прошивка отменена.");
+        return null;
+    }
+
+    private async Task<bool> RunFuseSetAsync(
+        DeviceProfile device,
+        ProgrammerSelection programmer,
+        string operation)
+    {
+        var args = BuildBaseArguments(device.AvrdudePart, programmer);
+        foreach (var item in new[]
+        {
+            (Memory: "lfuse", Value: device.Fuses.Low),
+            (Memory: "hfuse", Value: device.Fuses.High),
+            (Memory: "efuse", Value: device.Fuses.Extended)
+        })
+        {
+            args.Add("-U");
+            args.Add($"{item.Memory}:{operation}:0x{item.Value}:m");
+        }
+
+        var result = await RunAvrdudeAsync(args);
+        return result.Success;
     }
 
     private async Task WriteEepromOnlyAsync()
