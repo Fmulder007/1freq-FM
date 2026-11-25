@@ -284,7 +284,7 @@ internal sealed class ConsoleApp
             return;
         }
 
-        if (writeFuses)
+        if (writeFuses == true)
         {
             Console.WriteLine("2/5. Запись и проверка Fuse-битов...");
             if (!await RunFuseSetAsync(firmware, programmer, "w") ||
@@ -321,7 +321,7 @@ internal sealed class ConsoleApp
             return;
         }
 
-        WriteSuccess(writeFuses
+        WriteSuccess(writeFuses == true
             ? "Fuse-биты, Flash и настройки микросинтезатора записаны и проверены."
             : "Flash и настройки микросинтезатора записаны и проверены; Fuse-биты не изменялись.");
     }
@@ -611,10 +611,15 @@ internal sealed class ConsoleApp
             if (key is null)
                 return new List<string>();
 
-            return key.GetValueNames()
-                .Select(name => key.GetValue(name)?.ToString())
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Cast<string>()
+            var ports = new List<string>();
+            foreach (var name in key.GetValueNames())
+            {
+                var value = key.GetValue(name)?.ToString();
+                if (!string.IsNullOrWhiteSpace(value))
+                    ports.Add(value);
+            }
+
+            return ports
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
                 .ToList();
