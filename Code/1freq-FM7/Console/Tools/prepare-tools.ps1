@@ -26,42 +26,50 @@ $SourceArchives = @(
 try {
     New-Item -ItemType Directory -Force -Path $TempDir, $AvrdudeDir, $LicenseSourceDir | Out-Null
 
-    Write-Host 'Downloading AVRDUDE 8.3 (MinGW x64)...'
-    $AvrdudeArchive = Join-Path $TempDir 'avrdude.zip'
-    Invoke-WebRequest -Uri $AvrdudeUrl -OutFile $AvrdudeArchive
+    $AvrdudeExePath = Join-Path $AvrdudeDir 'avrdude.exe'
+    $AvrdudeConfPath = Join-Path $AvrdudeDir 'avrdude.conf'
 
-    $ActualHash = (Get-FileHash -LiteralPath $AvrdudeArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($ActualHash -ne $AvrdudeSha256) {
-        throw "AVRDUDE SHA-256 mismatch. Actual hash: $ActualHash"
+    if ((Test-Path -LiteralPath $AvrdudeExePath) -and (Test-Path -LiteralPath $AvrdudeConfPath)) {
+        Write-Host 'AVRDUDE 8.3 is already present; download skipped.'
     }
+    else {
+        Write-Host 'Downloading AVRDUDE 8.3 (MinGW x64)...'
+        $AvrdudeArchive = Join-Path $TempDir 'avrdude.zip'
+        Invoke-WebRequest -Uri $AvrdudeUrl -OutFile $AvrdudeArchive
 
-    $AvrdudeExtract = Join-Path $TempDir 'avrdude'
-    Expand-Archive -LiteralPath $AvrdudeArchive -DestinationPath $AvrdudeExtract -Force
+        $ActualHash = (Get-FileHash -LiteralPath $AvrdudeArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($ActualHash -ne $AvrdudeSha256) {
+            throw "AVRDUDE SHA-256 mismatch. Actual hash: $ActualHash"
+        }
 
-    $Exe = Get-ChildItem -LiteralPath $AvrdudeExtract -Filter 'avrdude.exe' -File -Recurse |
-        Select-Object -First 1
-    $Conf = Get-ChildItem -LiteralPath $AvrdudeExtract -Filter 'avrdude.conf' -File -Recurse |
-        Select-Object -First 1
+        $AvrdudeExtract = Join-Path $TempDir 'avrdude'
+        Expand-Archive -LiteralPath $AvrdudeArchive -DestinationPath $AvrdudeExtract -Force
 
-    if ($null -eq $Exe -or $null -eq $Conf) {
-        throw 'The AVRDUDE archive does not contain avrdude.exe and/or avrdude.conf.'
-    }
+        $Exe = Get-ChildItem -LiteralPath $AvrdudeExtract -Filter 'avrdude.exe' -File -Recurse |
+            Select-Object -First 1
+        $Conf = Get-ChildItem -LiteralPath $AvrdudeExtract -Filter 'avrdude.conf' -File -Recurse |
+            Select-Object -First 1
 
-    # Keep the complete MinGW runtime payload, including required DLL files.
-    $PayloadRoot = Split-Path -Parent $Exe.FullName
-    Get-ChildItem -LiteralPath $PayloadRoot -Force |
-        Copy-Item -Destination $AvrdudeDir -Recurse -Force
+        if ($null -eq $Exe -or $null -eq $Conf) {
+            throw 'The AVRDUDE archive does not contain avrdude.exe and/or avrdude.conf.'
+        }
 
-    if (-not (Test-Path -LiteralPath (Join-Path $AvrdudeDir 'avrdude.exe'))) {
-        Copy-Item -LiteralPath $Exe.FullName -Destination $AvrdudeDir -Force
-    }
-    if (-not (Test-Path -LiteralPath (Join-Path $AvrdudeDir 'avrdude.conf'))) {
-        Copy-Item -LiteralPath $Conf.FullName -Destination $AvrdudeDir -Force
-    }
+        # Keep the complete MinGW runtime payload, including required DLL files.
+        $PayloadRoot = Split-Path -Parent $Exe.FullName
+        Get-ChildItem -LiteralPath $PayloadRoot -Force |
+            Copy-Item -Destination $AvrdudeDir -Recurse -Force
 
-    if (-not (Test-Path -LiteralPath (Join-Path $AvrdudeDir 'avrdude.exe')) -or
-        -not (Test-Path -LiteralPath (Join-Path $AvrdudeDir 'avrdude.conf'))) {
-        throw 'Failed to prepare AVRDUDE in Tools/AVRDUDE.'
+        if (-not (Test-Path -LiteralPath $AvrdudeExePath)) {
+            Copy-Item -LiteralPath $Exe.FullName -Destination $AvrdudeDir -Force
+        }
+        if (-not (Test-Path -LiteralPath $AvrdudeConfPath)) {
+            Copy-Item -LiteralPath $Conf.FullName -Destination $AvrdudeDir -Force
+        }
+
+        if (-not (Test-Path -LiteralPath $AvrdudeExePath) -or
+            -not (Test-Path -LiteralPath $AvrdudeConfPath)) {
+            throw 'Failed to prepare AVRDUDE in Tools/AVRDUDE.'
+        }
     }
 
     Write-Host 'Downloading Zadig 2.9...'
