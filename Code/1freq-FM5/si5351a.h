@@ -51,8 +51,8 @@ class Si5351 {
   public:
     void cload(uint8_t xtal_load_c);
     void update_freq(uint8_t clk_num);
-    static uint32_t VCOFreq_Max; // == 900000000
-    static uint32_t VCOFreq_Min; // == 600000000
+    static uint32_t VCOFreq_Max;
+    static uint32_t VCOFreq_Min;
 
     Si5351() {
       xtal_freq = 270000000;

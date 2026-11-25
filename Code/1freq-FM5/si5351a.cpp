@@ -1,3 +1,24 @@
+/*
+ * ИСПРАВЛЕНИЕ ОШИБКИ set_power() — 25.11.2026
+ *
+ * В трёхаргументной функции все три значения мощности ошибочно
+ * направлялись на CLK0 через set_power(0, ...). Каждое следующее
+ * значение перезаписывало предыдущее, а power[1] и power[2]
+ * не обновлялись. Теперь параметры назначаются соответственно
+ * выходам CLK0, CLK1 и CLK2.
+ *
+ * Исправлено: UD0DAB.
+ */
+
+/*
+ * GSSx11: алгоритм целочисленного выбора PLL и MultiSynth.
+ * VCOFreq_Min и VCOFreq_Max задают допустимые границы частоты PLL.
+ * VCOFreq_Mid вычисляется в setup() как среднее этих границ.
+ * При выходе PLL за границы делитель пересчитывается как VCOFreq_Mid / Fout;
+ * если результат меньше 6, используется делитель 4.
+ * Дробная ветка CLK2 при активном CLK1 этим алгоритмом не изменяется.
+ */
+
 // Full-featured library for Si5351
 // version 1.0
 // (c) Andrew Bilokon, UR5FFR
@@ -41,9 +62,9 @@
 // for fast rdiv shift
 uint8_t power2[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 
-uint32_t Si5351::VCOFreq_Max = 750000000;
-uint32_t Si5351::VCOFreq_Min = 450000000;
-uint32_t Si5351::VCOFreq_Mid = 600000000;
+uint32_t Si5351::VCOFreq_Max = 600000000;
+uint32_t Si5351::VCOFreq_Min = 400000000;
+uint32_t Si5351::VCOFreq_Mid; // = 610000000;
 
 void si5351_write_reg(uint8_t reg, uint8_t data)
 {
@@ -147,8 +168,8 @@ void Si5351::set_power(uint8_t clk_num, uint8_t value)
 void Si5351::set_power(uint8_t power1, uint8_t power2, uint8_t power3)
 {
   set_power(0, power1);
-  set_power(0, power2);
-  set_power(0, power3);
+  set_power(1, power2);
+  set_power(2, power3);
 }
 
 void Si5351::set_xtal_freq(uint32_t freq)
@@ -242,12 +263,6 @@ void Si5351::update_freq(uint8_t clk_num)
 
   if (pll_freq < VCOFreq_Min || pll_freq > VCOFreq_Max) {
     divider = VCOFreq_Mid / freq[clk_num];
-    if (divider < 4)
-    {
-      disable_out(clk_num);
-      return;
-    }
-
     if (divider < 6)
       divider = 4;
 
@@ -293,10 +308,6 @@ void Si5351::update_freq12(uint8_t freq1_changed)
 
       if (pll_freq < VCOFreq_Min || pll_freq > VCOFreq_Max) {
         divider = VCOFreq_Mid / freq[1];
-        if (divider < 4) {
-          disable_out(1);
-          return;
-        }
         if (divider < 6)
           divider = 4;
         rdiv =  0;
@@ -350,10 +361,6 @@ void Si5351::update_freq12(uint8_t freq1_changed)
 
     if (pll_freq < VCOFreq_Min || pll_freq > VCOFreq_Max) {
       divider = VCOFreq_Mid / freq[2];
-      if (divider < 4) {
-        disable_out(2);
-        return;
-      }
       if (divider < 6)
         divider = 4;
       rdiv =  0;
