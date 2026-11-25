@@ -133,7 +133,7 @@ internal sealed class ConsoleApp
             {
                 var allowed = parameter.AllowedValues.Count > 0
                     ? " Допустимо: " + string.Join(", ", parameter.AllowedValues) + "."
-                    : $" Диапазон: {parameter.MinValue}…{parameter.MaxValue}.";
+                    : $" Диапазон: {parameter.MinValue} - {parameter.MaxValue}.";
 
                 Console.Write($"{parameter.Description} [{oldValue}].{allowed} ");
                 var input = Console.ReadLine()?.Trim();
