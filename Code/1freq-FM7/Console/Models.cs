@@ -88,7 +88,7 @@ internal static class CatalogLoader
 
         foreach (var parameter in catalog.EepromLayout.Parameters)
         {
-            if (!Regex.IsMatch(parameter.Tag, @"^[A-Z]{2}$"))
+            if (!Regex.IsMatch(parameter.Tag, @"^[A-Z][A-Z0-9]$"))
                 throw new InvalidDataException($"Некорректная метка EEPROM: {parameter.Tag}.");
             if (!tags.Add(parameter.Tag))
                 throw new InvalidDataException($"Повторяется метка EEPROM: {parameter.Tag}.");
