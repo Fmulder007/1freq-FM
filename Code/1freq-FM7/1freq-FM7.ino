@@ -50,8 +50,8 @@
 
 // Безопасные границы для арифметики выбранной версии библиотеки GSSx11.
 // XT допускает кварцы, применяемые в проекте, включая 27.007840 и 32 MHz.
-#define MIN_XTAL_FREQ            5000000UL
-#define MAX_XTAL_FREQ          100000000UL
+#define MIN_XTAL_FREQ            7000000UL
+#define MAX_XTAL_FREQ           33000000UL
 
 // При VCO=400...600 MHz и используемом R-divider:
 #define MIN_OUTPUT_FREQ             15000UL
