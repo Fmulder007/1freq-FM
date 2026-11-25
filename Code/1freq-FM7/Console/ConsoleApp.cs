@@ -476,15 +476,17 @@ internal sealed class ConsoleApp
             Console.WriteLine("Обнаруженные последовательные порты:");
             for (var i = 0; i < ports.Count; i++)
                 Console.WriteLine($"  {i + 1}. {ports[i]}");
-            Console.Write("Номер из списка или имя порта (например COM5): ");
+
+            Console.Write(string.IsNullOrWhiteSpace(preferredPort)
+                ? "Номер из списка или имя порта (например COM5): "
+                : $"Номер из списка или имя порта [{preferredPort}]: ");
         }
         else
         {
-            Console.Write("COM-порт Nano (например COM5): ");
+            Console.Write(string.IsNullOrWhiteSpace(preferredPort)
+                ? "COM-порт Nano (например COM5): "
+                : $"COM-порт Nano [{preferredPort}]: ");
         }
-
-        if (!string.IsNullOrWhiteSpace(preferredPort))
-            Console.Write($"COM-порт [{preferredPort}]: ");
 
         var input = Console.ReadLine()?.Trim();
         if (string.IsNullOrWhiteSpace(input))
