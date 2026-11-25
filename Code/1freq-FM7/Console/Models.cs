@@ -38,10 +38,18 @@ internal sealed class DeviceProfile
     public int FlashBytes { get; set; }
     public int EepromBytes { get; set; }
     public string EepromFormat { get; set; } = "FM7";
+    public FuseSettings Fuses { get; set; } = new();
     public bool Enabled { get; set; } = true;
     public List<string> Aliases { get; set; } = new();
     public List<string> SupportedProgrammers { get; set; } = new();
     public string Notes { get; set; } = "";
+}
+
+internal sealed class FuseSettings
+{
+    public string Low { get; set; } = "";
+    public string High { get; set; } = "";
+    public string Extended { get; set; } = "";
 }
 
 internal sealed record ProgrammerSelection(string Id, string DisplayName, string AvrdudeId, string? Port, int? BaudRate);
@@ -133,6 +141,11 @@ internal static class CatalogLoader
                 throw new InvalidDataException($"Недостаточный объём памяти в профиле {device.Name}.");
             if (!string.Equals(device.EepromFormat, catalog.EepromLayout.FormatId, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"Формат EEPROM профиля {device.Name} не совпадает с форматом каталога.");
+            if (device.Fuses is null ||
+                !Regex.IsMatch(device.Fuses.Low, @"^[0-9A-Fa-f]{2}$") ||
+                !Regex.IsMatch(device.Fuses.High, @"^[0-9A-Fa-f]{2}$") ||
+                !Regex.IsMatch(device.Fuses.Extended, @"^[0-9A-Fa-f]{2}$"))
+                throw new InvalidDataException($"Для {device.Name} должны быть заданы LFUSE, HFUSE и EFUSE как два шестнадцатеричных символа.");
             if (device.SupportedProgrammers.Count == 0 ||
                 device.SupportedProgrammers.Any(p => p is not ("usbasp" or "arduino-isp")))
                 throw new InvalidDataException($"Для {device.Name} указаны неизвестные программаторы.");
