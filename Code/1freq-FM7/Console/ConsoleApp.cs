@@ -680,6 +680,15 @@ internal sealed class ConsoleApp
             args.Add(programmer.BaudRate.Value.ToString(CultureInfo.InvariantCulture));
         }
 
+        // USBasp supports an explicit ISP SCK rate. Use its 32 kHz setting
+        // instead of relying on the programmer firmware's AUTO default.
+        // ArduinoISP/STK500v1 does not support AVRDUDE bitclock control.
+        if (string.Equals(programmer.Id, "usbasp", StringComparison.OrdinalIgnoreCase))
+        {
+            args.Add("-B");
+            args.Add("32kHz");
+        }
+
         args.Add("-v");
         return args;
     }
