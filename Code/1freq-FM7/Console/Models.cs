@@ -1,12 +1,12 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
-internal sealed class DeviceCatalog
+internal sealed class FirmwareCatalog
 {
-    public int SchemaVersion { get; set; } = 1;
-    public string ProbePart { get; set; } = "m328p";
+    public int SchemaVersion { get; set; } = 2;
     public EepromLayout EepromLayout { get; set; } = new();
-    public List<DeviceProfile> Devices { get; set; } = new();
+    public Dictionary<string, FirmwareProfile> Firmwares { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class EepromLayout
@@ -28,28 +28,27 @@ internal sealed class EepromParameter
     public string Unit { get; set; } = "";
 }
 
-internal sealed class DeviceProfile
+internal sealed class FirmwareProfile
 {
-    public string Id { get; set; } = "";
+    [JsonIgnore]
+    public string FileName { get; set; } = "";
+
     public string Name { get; set; } = "";
-    public string Signature { get; set; } = "";
     public string AvrdudePart { get; set; } = "";
-    public string FirmwareFile { get; set; } = "";
     public int FlashBytes { get; set; }
     public int EepromBytes { get; set; }
     public string EepromFormat { get; set; } = "FM7";
-    public FuseSettings Fuses { get; set; } = new();
+    public FuseSettings? Fuses { get; set; }
     public bool Enabled { get; set; } = true;
-    public List<string> Aliases { get; set; } = new();
     public List<string> SupportedProgrammers { get; set; } = new();
     public string Notes { get; set; } = "";
 }
 
 internal sealed class FuseSettings
 {
-    public string Low { get; set; } = "";
-    public string High { get; set; } = "";
-    public string Extended { get; set; } = "";
+    public string? Low { get; set; }
+    public string? High { get; set; }
+    public string? Extended { get; set; }
 }
 
 internal sealed record ProgrammerSelection(string Id, string DisplayName, string AvrdudeId, string? Port, int? BaudRate);
@@ -64,30 +63,26 @@ internal static class CatalogLoader
         AllowTrailingCommas = true
     };
 
-    public static DeviceCatalog Load(string path)
+    public static FirmwareCatalog Load(string path)
     {
         if (!File.Exists(path))
-            throw new FileNotFoundException("Не найден каталог микроконтроллеров Config/devices.json.", path);
+            throw new FileNotFoundException("Не найден каталог прошивок Config/devices.json.", path);
 
         var json = File.ReadAllText(path);
-        var catalog = JsonSerializer.Deserialize<DeviceCatalog>(json, JsonOptions)
+        var catalog = JsonSerializer.Deserialize<FirmwareCatalog>(json, JsonOptions)
             ?? throw new InvalidDataException("Config/devices.json пуст или не содержит объект каталога.");
 
         Validate(catalog);
         return catalog;
     }
 
-    public static void Validate(DeviceCatalog catalog)
+    public static void Validate(FirmwareCatalog catalog)
     {
-        if (catalog.SchemaVersion != 1)
+        if (catalog.SchemaVersion != 2)
             throw new InvalidDataException($"Не поддерживается schemaVersion={catalog.SchemaVersion} в devices.json.");
-
-        if (!Regex.IsMatch(catalog.ProbePart, @"^[A-Za-z0-9_.-]+$"))
-            throw new InvalidDataException("Некорректное значение probePart.");
 
         if (catalog.EepromLayout.RecordSize < 4 || catalog.EepromLayout.RecordSize > 64)
             throw new InvalidDataException("eepromLayout.recordSize должен быть от 4 до 64 байт.");
-
         if (catalog.EepromLayout.Parameters.Count == 0)
             throw new InvalidDataException("В eepromLayout не описаны параметры.");
 
@@ -116,39 +111,47 @@ internal static class CatalogLoader
             requiredEepromBytes = Math.Max(requiredEepromBytes, checked(parameter.Address + catalog.EepromLayout.RecordSize));
         }
 
-        if (catalog.Devices.Count == 0)
-            throw new InvalidDataException("В devices.json нет профилей микроконтроллеров.");
+        if (catalog.Firmwares.Count == 0)
+            throw new InvalidDataException("В devices.json нет записей в разделе firmwares.");
 
-        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var signatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var device in catalog.Devices)
+        var fileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in catalog.Firmwares)
         {
-            if (!Regex.IsMatch(device.Id, @"^[A-Za-z0-9_-]+$") || !ids.Add(device.Id))
-                throw new InvalidDataException($"Пустой или повторяющийся идентификатор МК: {device.Id}.");
-            if (string.IsNullOrWhiteSpace(device.Name))
-                throw new InvalidDataException($"У профиля {device.Id} не задано название.");
-            if (!Regex.IsMatch(device.Signature, @"^[0-9A-Fa-f]{6}$") || !signatures.Add(device.Signature))
-                throw new InvalidDataException($"Некорректная или повторяющаяся сигнатура МК: {device.Signature}.");
-            if (!Regex.IsMatch(device.AvrdudePart, @"^[A-Za-z0-9_.-]+$"))
-                throw new InvalidDataException($"Некорректный avrdudePart для {device.Name}.");
-            if (string.IsNullOrWhiteSpace(device.FirmwareFile) ||
-                !string.Equals(Path.GetFileName(device.FirmwareFile), device.FirmwareFile, StringComparison.Ordinal))
-                throw new InvalidDataException($"firmwareFile для {device.Name} должен быть именем файла без каталогов.");
-            if (!device.FirmwareFile.EndsWith(".hex", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException($"Для {device.Name} ожидается HEX-файл.");
-            if (device.FlashBytes <= 0 || device.EepromBytes < requiredEepromBytes)
-                throw new InvalidDataException($"Недостаточный объём памяти в профиле {device.Name}.");
-            if (!string.Equals(device.EepromFormat, catalog.EepromLayout.FormatId, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException($"Формат EEPROM профиля {device.Name} не совпадает с форматом каталога.");
-            if (device.Fuses is null ||
-                !Regex.IsMatch(device.Fuses.Low, @"^[0-9A-Fa-f]{2}$") ||
-                !Regex.IsMatch(device.Fuses.High, @"^[0-9A-Fa-f]{2}$") ||
-                !Regex.IsMatch(device.Fuses.Extended, @"^[0-9A-Fa-f]{2}$"))
-                throw new InvalidDataException($"Для {device.Name} должны быть заданы LFUSE, HFUSE и EFUSE как два шестнадцатеричных символа.");
-            if (device.SupportedProgrammers.Count == 0 ||
-                device.SupportedProgrammers.Any(p => p is not ("usbasp" or "arduino-isp")))
-                throw new InvalidDataException($"Для {device.Name} указаны неизвестные программаторы.");
+            var fileName = item.Key;
+            var firmware = item.Value;
+
+            if (string.IsNullOrWhiteSpace(fileName) ||
+                !string.Equals(Path.GetFileName(fileName), fileName, StringComparison.Ordinal) ||
+                !fileName.EndsWith(".hex", StringComparison.OrdinalIgnoreCase) ||
+                !fileNames.Add(fileName))
+                throw new InvalidDataException($"Некорректное или повторяющееся имя HEX-файла: {fileName}.");
+
+            firmware.FileName = fileName;
+
+            if (string.IsNullOrWhiteSpace(firmware.Name))
+                throw new InvalidDataException($"Для {fileName} не задано название микроконтроллера.");
+            if (!Regex.IsMatch(firmware.AvrdudePart, @"^[A-Za-z0-9_.-]+$"))
+                throw new InvalidDataException($"Некорректный avrdudePart для {firmware.Name}.");
+            if (firmware.FlashBytes <= 0 || firmware.EepromBytes < requiredEepromBytes)
+                throw new InvalidDataException($"Недостаточный объём памяти в профиле {firmware.Name}.");
+            if (!string.Equals(firmware.EepromFormat, catalog.EepromLayout.FormatId, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"Формат EEPROM профиля {firmware.Name} не совпадает с форматом каталога.");
+
+            if (firmware.Fuses is not null)
+            {
+                var fuseValues = new[] { firmware.Fuses.Low, firmware.Fuses.High, firmware.Fuses.Extended };
+                if (fuseValues.All(string.IsNullOrWhiteSpace))
+                    throw new InvalidDataException($"Для {firmware.Name} либо укажите fuse-значения, либо удалите объект fuses.");
+                foreach (var fuse in fuseValues.Where(value => !string.IsNullOrWhiteSpace(value)))
+                {
+                    if (!Regex.IsMatch(fuse!, @"^[0-9A-Fa-f]{2}$"))
+                        throw new InvalidDataException($"Fuse-значения для {firmware.Name} должны содержать по два шестнадцатеричных символа.");
+                }
+            }
+
+            if (firmware.SupportedProgrammers.Count == 0 ||
+                firmware.SupportedProgrammers.Any(p => p is not ("usbasp" or "arduino-isp")))
+                throw new InvalidDataException($"Для {firmware.Name} указаны неизвестные программаторы.");
         }
     }
 }
