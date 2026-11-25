@@ -30,6 +30,15 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Copy native tools explicitly; SDK content globs may omit ignored runtime binaries.
+if not exist "dist\1freq-FM-Console\Tools" mkdir "dist\1freq-FM-Console\Tools"
+xcopy /E /I /Y "Tools" "dist\1freq-FM-Console\Tools" >nul
+if errorlevel 1 (
+    echo.
+    echo Failed to copy bundled tools into publish directory.
+    exit /b 1
+)
+
 if not exist "dist" mkdir "dist"
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ^
     "Compress-Archive -Path 'dist\1freq-FM-Console\*' -DestinationPath 'dist\1freq-FM-Console-win-x64.zip' -Force"
