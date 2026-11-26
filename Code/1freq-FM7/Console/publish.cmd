@@ -4,7 +4,7 @@ cd /d "%~dp0"
 if errorlevel 1 goto WorkingDirectoryFailed
 
 set "PUBLISH_DIR=dist\1freq-FM-Console"
-set "PACKAGE_NAME=1freq-FM-Console-win-x64"
+set "PACKAGE_NAME=1freq-FM-Console"
 set "ZIP_PATH=dist\%PACKAGE_NAME%.zip"
 
 echo ==============================================
