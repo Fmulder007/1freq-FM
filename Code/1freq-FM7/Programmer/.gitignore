@@ -1,0 +1,11 @@
+# Generated compiler toolchain and local build outputs
+toolchain/
+dist/
+1Freq-FM7-Programmer.exe
+
+# AVRDUDE/runtime files downloaded by the bundle workflow
+avrdude.exe
+avrdude.conf
+avrdude-build-info.txt
+ATmega328P.hex
+*.dll

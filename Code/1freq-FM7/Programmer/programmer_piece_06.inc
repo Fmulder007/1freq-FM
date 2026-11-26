@@ -29,7 +29,7 @@ static int parse_parameter_value(const unsigned char data[EEPROM_RECORD_SIZE], u
     int digit_count = 0;
     if (data[0] != (unsigned char)tag[0] || data[1] != (unsigned char)tag[1] || data[2] != '=') return 0;
     while (i < EEPROM_RECORD_SIZE && data[i] >= '0' && data[i] <= '9') {
-        number = number * 10u + (unt64_t)(data[i] - '0');
+        number = number * 10u + (uint64_t)(data[i] - '0');
         if (number > 0xFFFFFFFFu) return 0;
         digit_count++;
         i++;
