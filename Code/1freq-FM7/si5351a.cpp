@@ -62,7 +62,7 @@
 // for fast rdiv shift
 uint8_t power2[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 
-uint32_t Si5351::VCOFreq_Max = 600000000;
+uint32_t Si5351::VCOFreq_Max = 700000000;
 uint32_t Si5351::VCOFreq_Min = 400000000;
 uint32_t Si5351::VCOFreq_Mid; // = 610000000;
 

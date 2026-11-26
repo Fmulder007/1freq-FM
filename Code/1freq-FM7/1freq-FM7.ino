@@ -44,7 +44,7 @@
 
 const uint8_t CONTROL_PIN = A0;  // PC0 / ADC0; номер вывода задаёт вариант платы
 
-#define DEFAULT_XTAL_FREQ       27007840UL
+#define DEFAULT_XTAL_FREQ       27000000UL
 #define DEFAULT_MODE            5
 #define DEFAULT_F1               2000000UL
 #define DEFAULT_F2               1000000UL
