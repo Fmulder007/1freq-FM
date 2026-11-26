@@ -78,8 +78,8 @@ if errorlevel 1 goto PackageDirectoryCreateFailed
 robocopy "%PUBLISH_DIR%" "%PACKAGE_DIR%" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul
 if errorlevel 8 goto PackageCopyFailed
 
-if not exist "dist\\" mkdir "dist"
-if not exist "dist\\" goto DistDirectoryCreateFailed
+if not exist "dist" mkdir "dist"
+if not exist "dist\." goto DistDirectoryCreateFailed
 
 echo.
 echo Creating ZIP with a top-level folder...
