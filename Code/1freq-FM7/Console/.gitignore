@@ -8,9 +8,7 @@ Tools/AVRDUDE/
 Tools/Zadig.exe
 Licenses/Source/
 
-# Runtime-generated settings and EEPROM backups
+# Runtime-generated settings
 Data/last-settings.json
 Data/eeprom.hex
 Data/app-state.json
-Backup/*
-!Backup/README.md
