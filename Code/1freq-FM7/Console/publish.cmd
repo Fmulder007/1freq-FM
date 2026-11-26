@@ -5,8 +5,6 @@ if errorlevel 1 goto WorkingDirectoryFailed
 
 set "PUBLISH_DIR=dist\1freq-FM-Console"
 set "PACKAGE_NAME=1freq-FM-Console-win-x64"
-set "PACKAGE_ROOT=dist\_package"
-set "PACKAGE_DIR=%PACKAGE_ROOT%\%PACKAGE_NAME%"
 set "ZIP_PATH=dist\%PACKAGE_NAME%.zip"
 
 echo ==============================================
@@ -29,6 +27,14 @@ if not exist "Config\devices.json" goto SourceConfigMissing
 if not exist "Firmware\" goto SourceFirmwareMissing
 if not exist "Data\README.md" goto SourceDataReadmeMissing
 
+REM Remove obsolete staging directory left by older versions of this script.
+if exist "dist\_package" rmdir /S /Q "dist\_package"
+if exist "dist\_package" goto ObsoletePackageCleanupFailed
+
+REM Do not leave an old ZIP that could be mistaken for this build.
+if exist "%ZIP_PATH%" del /F /Q "%ZIP_PATH%"
+if exist "%ZIP_PATH%" goto OldZipCleanupFailed
+
 echo Cleaning previous publish output...
 if exist "%PUBLISH_DIR%" rmdir /S /Q "%PUBLISH_DIR%"
 if exist "%PUBLISH_DIR%" goto PublishDirectoryCleanupFailed
@@ -40,7 +46,7 @@ if errorlevel 1 goto PublishFailed
 
 echo.
 echo Copying required application resources...
-REM Copy these folders explicitly so the release does not depend on SDK content-glob behaviour.
+REM Copy explicitly so the release does not depend on SDK content-glob behaviour.
 robocopy "Config" "%PUBLISH_DIR%\Config" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul
 if errorlevel 8 goto ResourceCopyFailed
 
@@ -68,36 +74,26 @@ echo Running self-test on the published application...
 "%PUBLISH_DIR%\1freq-FM.exe" --self-test
 if errorlevel 1 goto SelfTestFailed
 
-echo.
-echo Preparing ZIP folder...
-if exist "%PACKAGE_ROOT%" rmdir /S /Q "%PACKAGE_ROOT%"
-if exist "%PACKAGE_ROOT%" goto PackageDirectoryCleanupFailed
-mkdir "%PACKAGE_DIR%"
-if errorlevel 1 goto PackageDirectoryCreateFailed
-
-robocopy "%PUBLISH_DIR%" "%PACKAGE_DIR%" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul
-if errorlevel 8 goto PackageCopyFailed
-
 if not exist "dist" mkdir "dist"
 if not exist "dist\." goto DistDirectoryCreateFailed
 
 echo.
 echo Creating ZIP with a top-level folder...
+REM Add the top-level package folder directly to each ZIP entry; no staging directory is needed.
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; $source=(Resolve-Path '%PACKAGE_DIR%').Path; $destination=Join-Path (Get-Location) '%ZIP_PATH%'; if (Test-Path $destination) { Remove-Item -LiteralPath $destination -Force }; [System.IO.Compression.ZipFile]::CreateFromDirectory($source,$destination,[System.IO.Compression.CompressionLevel]::Optimal,$true)"
+    "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression; Add-Type -AssemblyName System.IO.Compression.FileSystem; $source=(Resolve-Path '%PUBLISH_DIR%').Path.TrimEnd('\'); $root='%PACKAGE_NAME%'; $destination=Join-Path (Get-Location) '%ZIP_PATH%'; $files=@(Get-ChildItem -LiteralPath $source -File -Recurse); if ($files.Count -eq 0) { throw 'Published application directory is empty.' }; $archive=[System.IO.Compression.ZipFile]::Open($destination,[System.IO.Compression.ZipArchiveMode]::Create); try { foreach($file in $files) { $relative=$file.FullName.Substring($source.Length).TrimStart([char[]]@('\','/')).Replace('\','/'); $entryName=$root + '/' + $relative; [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$file.FullName,$entryName,[System.IO.Compression.CompressionLevel]::Optimal) | Out-Null } } finally { $archive.Dispose() }"
 if errorlevel 1 goto ZipCreationFailed
 
 echo.
 echo Verifying ZIP contents...
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip=[System.IO.Compression.ZipFile]::OpenRead((Resolve-Path '%ZIP_PATH%').Path); try { $required=@('%PACKAGE_NAME%/1freq-FM.exe','%PACKAGE_NAME%/Config/devices.json','%PACKAGE_NAME%/Firmware'); foreach($name in $required) { if (-not ($zip.Entries | Where-Object { $_.FullName -eq $name -or $_.FullName.StartsWith($name + '/') })) { throw ('ZIP is missing: ' + $name) } } } finally { $zip.Dispose() }"
+    "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression; Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip=[System.IO.Compression.ZipFile]::OpenRead((Resolve-Path '%ZIP_PATH%').Path); try { $names=@($zip.Entries | ForEach-Object { $_.FullName }); $required=@('%PACKAGE_NAME%/1freq-FM.exe','%PACKAGE_NAME%/Config/devices.json','%PACKAGE_NAME%/Tools/AVRDUDE/avrdude.exe','%PACKAGE_NAME%/Tools/AVRDUDE/avrdude.conf','%PACKAGE_NAME%/Tools/Zadig.exe'); foreach($name in $required) { if ($names -notcontains $name) { throw ('ZIP is missing: ' + $name) } }; if (-not ($names | Where-Object { $_.StartsWith('%PACKAGE_NAME%/Firmware/') })) { throw 'ZIP is missing Firmware files.' }; if (@($names | Where-Object { -not $_.StartsWith('%PACKAGE_NAME%/') }).Count -gt 0) { throw 'ZIP contains files outside the top-level package folder.' } } finally { $zip.Dispose() }"
 if errorlevel 1 goto ZipVerificationFailed
-
-rmdir /S /Q "%PACKAGE_ROOT%"
 
 echo.
 echo READY: %ZIP_PATH%
-echo ZIP structure: %PACKAGE_NAME%\1freq-FM.exe and all required folders.
+echo ZIP contains folder: %PACKAGE_NAME%\
+echo Published files remain in: %PUBLISH_DIR%\
 echo.
 pause
 exit /b 0
@@ -121,6 +117,14 @@ goto Failed
 
 :SourceDataReadmeMissing
 echo ERROR: Source file Data\README.md is missing.
+goto Failed
+
+:ObsoletePackageCleanupFailed
+echo ERROR: Cannot remove obsolete dist\_package directory.
+goto Failed
+
+:OldZipCleanupFailed
+echo ERROR: Cannot remove the previous ZIP file.
 goto Failed
 
 :PublishDirectoryCleanupFailed
@@ -150,18 +154,6 @@ goto Failed
 
 :SelfTestFailed
 echo ERROR: Published application self-test failed. ZIP was not created.
-goto Failed
-
-:PackageDirectoryCleanupFailed
-echo ERROR: Cannot clean temporary ZIP staging directory.
-goto Failed
-
-:PackageDirectoryCreateFailed
-echo ERROR: Cannot create temporary ZIP staging directory.
-goto Failed
-
-:PackageCopyFailed
-echo ERROR: Failed to copy published files into the ZIP staging directory.
 goto Failed
 
 :DistDirectoryCreateFailed
