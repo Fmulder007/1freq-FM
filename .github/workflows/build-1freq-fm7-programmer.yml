@@ -82,33 +82,108 @@ jobs:
           This compiler is invoked with -m32 by build-xp-x86.cmd.
           "@
 
-      - name: Download AVRDUDE 7.3 x86 and prepare runtime files
+      - name: Select and prepare XP-compatible AVRDUDE 7.3 x86
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
           $programmer = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Programmer"
-          $zip = Join-Path $env:RUNNER_TEMP "avrdude-v7.3-windows-x86.zip"
-          $extract = Join-Path $env:RUNNER_TEMP "avrdude-stage"
+          $objdump = Join-Path $programmer "toolchain/bin/objdump.exe"
+          $variants = @(
+            @{
+              Name = "AVRDUDE 7.3 MinGW x86"
+              Url  = "https://github.com/avrdudes/avrdude/releases/download/v7.3/avrdude-v7.3-windows_mingw-x86.zip"
+            },
+            @{
+              Name = "AVRDUDE 7.3 Arduino MinGW32"
+              Url  = "https://github.com/avrdudes/avrdude/releases/download/v7.3/avrdude-v7.3-arduino_mingw32.zip"
+            }
+          )
 
-          Invoke-WebRequest -Uri "https://github.com/avrdudes/avrdude/releases/download/v7.3/avrdude-v7.3-windows-x86.zip" -OutFile $zip
-          Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+          $selected = $null
+          foreach ($variant in $variants) {
+            $zip = Join-Path $env:RUNNER_TEMP (($variant.Name -replace '[^A-Za-z0-9]+','-') + ".zip")
+            $extract = Join-Path $env:RUNNER_TEMP (($variant.Name -replace '[^A-Za-z0-9]+','-') + "-extract")
+            if (Test-Path $extract) { Remove-Item -Recurse -Force $extract }
+            New-Item -ItemType Directory -Force -Path $extract | Out-Null
 
-          $exe = Get-ChildItem -Path $extract -Filter "avrdude.exe" -Recurse | Select-Object -First 1
-          $conf = Get-ChildItem -Path $extract -Filter "avrdude.conf" -Recurse | Select-Object -First 1
-          if (!$exe -or !$conf) { throw "AVRDUDE archive did not contain avrdude.exe and avrdude.conf." }
+            Write-Host "Checking $($variant.Name)"
+            Invoke-WebRequest -Uri $variant.Url -OutFile $zip
+            Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
 
-          Copy-Item -LiteralPath $exe.FullName -Destination (Join-Path $programmer "avrdude.exe") -Force
-          Copy-Item -LiteralPath $conf.FullName -Destination (Join-Path $programmer "avrdude.conf") -Force
+            $exe = Get-ChildItem -Path $extract -Filter "avrdude.exe" -Recurse | Select-Object -First 1
+            $conf = Get-ChildItem -Path $extract -Filter "avrdude.conf" -Recurse | Select-Object -First 1
+            if (!$exe -or !$conf) {
+              Write-Host "Rejected: executable or configuration file missing."
+              continue
+            }
 
-          Get-ChildItem -Path $extract -Filter "*.dll" -Recurse -File | ForEach-Object {
-            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $programmer $_.Name) -Force
+            $fileInfo = & $objdump -f $exe.FullName | Out-String
+            $headers = & $objdump -p $exe.FullName | Out-String
+            if ($LASTEXITCODE -ne 0 -or $fileInfo -notmatch "pei-i386") {
+              Write-Host "Rejected: not a valid PE32 x86 executable."
+              continue
+            }
+
+            $majorMatch = [regex]::Match($headers, "MajorSubsystemVersion\s+(\d+)")
+            $minorMatch = [regex]::Match($headers, "MinorSubsystemVersion\s+(\d+)")
+            if (!$majorMatch.Success -or !$minorMatch.Success) {
+              Write-Host "Rejected: subsystem version could not be read."
+              continue
+            }
+            $major = [int]$majorMatch.Groups[1].Value
+            $minor = [int]$minorMatch.Groups[1].Value
+            if ($major -gt 5 -or ($major -eq 5 -and $minor -gt 1)) {
+              Write-Host "Rejected: Windows subsystem $major.$minor is newer than XP 5.01."
+              continue
+            }
+
+            if ($headers -match "(?i)DLL Name:\s*(WINUSB\.DLL|API-MS-WIN-[^\s]+)") {
+              Write-Host "Rejected: statically imports a DLL/API set unavailable on Windows XP."
+              continue
+            }
+            if ($headers -match "(?i)\b(GetTickCount64|InitializeCriticalSectionEx|GetSystemTimePreciseAsFileTime|GetFileInformationByHandleEx|GetFinalPathNameByHandleW|CancelIoEx|GetUserDefaultLocaleName|GetLocaleInfoEx|SetThreadErrorMode|GetThreadId|AddDllDirectory)\b") {
+              Write-Host "Rejected: imports a Windows API introduced after XP."
+              continue
+            }
+
+            $help = & $exe.FullName -? 2>&1 | Out-String
+            if ($help -notmatch "(?i)avrdude") {
+              Write-Host "Rejected: executable did not start correctly on the build host."
+              continue
+            }
+
+            $selected = @{
+              Name = $variant.Name
+              Extract = $extract
+              Exe = $exe.FullName
+              Conf = $conf.FullName
+              Major = $major
+              Minor = $minor
+            }
+            break
           }
 
-          $firmware = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Console/Firmware/ATmega328P.hex"
-          if (!(Test-Path $firmware)) { throw "Existing Console/Firmware/ATmega328P.hex was not found." }
-          Copy-Item -LiteralPath $firmware -Destination (Join-Path $programmer "ATmega328P.hex") -Force
+          if (!$selected) {
+            throw "Neither AVRDUDE 7.3 MinGW x86 distribution passed the XP PE/API checks. No incompatible executable will be packaged."
+          }
+
+          Copy-Item -LiteralPath $selected.Exe -Destination (Join-Path $programmer "avrdude.exe") -Force
+          Copy-Item -LiteralPath $selected.Conf -Destination (Join-Path $programmer "avrdude.conf") -Force
+          Get-ChildItem -Path $selected.Extract -Filter "*.dll" -Recurse -File | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $programmer $_.Name) -Force
+          }
+          Set-Content -Path (Join-Path $programmer "avrdude-build-info.txt") -Value @"
+          $($selected.Name)
+          Windows subsystem: $($selected.Major).$($selected.Minor)
+          Selected after checking PE32 x86 architecture, Windows XP subsystem level,
+          static imports, and successful startup on the Windows build host.
+          "@
+
+          Write-Host "Selected: $($selected.Name)"
+          Write-Host "AVRDUDE subsystem: $($selected.Major).$($selected.Minor)"
+          Write-Host "Bundled AVRDUDE DLL count: $((Get-ChildItem $programmer -Filter '*.dll' -File).Count)"
 
       - name: Build and verify 32-bit XP-targeted program
         shell: pwsh
