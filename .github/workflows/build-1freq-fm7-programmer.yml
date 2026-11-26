@@ -1,0 +1,166 @@
+name: Build 1Freq-FM7 Programmer bundle
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-1freq-fm7-programmer.yml"
+      - "Code/1freq-FM7/Programmer/**"
+      - "Code/1freq-FM7/Console/Firmware/ATmega328P.hex"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download and unpack portable TDM-GCC
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+          $programmer = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Programmer"
+          $stage = Join-Path $env:RUNNER_TEMP "tdm-stage"
+          $toolchain = Join-Path $programmer "toolchain"
+          $installer = Join-Path $env:RUNNER_TEMP "tdm64-gcc-10.3.0-2.exe"
+          $sevenZip = Join-Path $env:ProgramFiles "7-Zip/7z.exe"
+
+          if (!(Test-Path $sevenZip)) {
+            throw "7-Zip was not found on the Windows runner."
+          }
+
+          New-Item -ItemType Directory -Force -Path $stage, $toolchain | Out-Null
+          Invoke-WebRequest -Uri "https://github.com/jmeubank/tdm-gcc/releases/download/v10.3.0-tdm64-2/tdm64-gcc-10.3.0-2.exe" -OutFile $installer
+
+          & $sevenZip e $installer "-o$stage" -y
+          if ($LASTEXITCODE -gt 1) { throw "Could not unpack TDM-GCC installer (7-Zip exit $LASTEXITCODE)." }
+
+          $xzFiles = Get-ChildItem -Path $stage -Filter "*.tar.xz"
+          if (!$xzFiles) { throw "TDM-GCC installer did not contain its component archives." }
+
+          foreach ($xz in $xzFiles) {
+            & $sevenZip e $xz.FullName "-o$stage" -y
+            if ($LASTEXITCODE -gt 1) { throw "Could not unpack $($xz.Name)." }
+          }
+
+          $tarFiles = Get-ChildItem -Path $stage -Filter "*.tar"
+          if (!$tarFiles) { throw "TDM-GCC component TAR archives were not extracted." }
+
+          foreach ($tar in $tarFiles) {
+            & $sevenZip x $tar.FullName "-o$toolchain" -y
+            if ($LASTEXITCODE -gt 1) { throw "Could not install $($tar.Name) into the portable toolchain." }
+          }
+
+          $gcc = Join-Path $toolchain "bin/gcc.exe"
+          if (!(Test-Path $gcc)) {
+            Get-ChildItem -Path $toolchain -Filter "gcc.exe" -Recurse | Select-Object -First 10 -ExpandProperty FullName | Write-Host
+            throw "Expected portable compiler toolchain/bin/gcc.exe was not created."
+          }
+
+          & $gcc --version
+          if ($LASTEXITCODE -ne 0) { throw "The unpacked GCC compiler cannot be started." }
+
+          $target = (& $gcc -dumpmachine).Trim()
+          Write-Host "TDM-GCC target: $target"
+          if ($target -ne "x86_64-w64-mingw32") {
+            throw "Unexpected TDM-GCC target: $target"
+          }
+
+          $licenseFiles = Get-ChildItem -Path $toolchain -Filter "COPYING*" -Recurse -File
+          Write-Host "Included TDM license files: $($licenseFiles.Count)"
+          Set-Content -Path (Join-Path $toolchain "README-TDM-GCC.txt") -Value @"
+          TDM-GCC 10.3.0 TDM64 / MinGW-w64
+          Official source: https://jmeubank.github.io/tdm-gcc/
+          Release: https://github.com/jmeubank/tdm-gcc/releases/tag/v10.3.0-tdm64-2
+          This compiler is invoked with -m32 by build-xp-x86.cmd.
+          "@
+
+      - name: Download AVRDUDE 7.3 x86 and prepare runtime files
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+          $programmer = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Programmer"
+          $zip = Join-Path $env:RUNNER_TEMP "avrdude-v7.3-windows-x86.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "avrdude-stage"
+
+          Invoke-WebRequest -Uri "https://github.com/avrdudes/avrdude/releases/download/v7.3/avrdude-v7.3-windows-x86.zip" -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+
+          $exe = Get-ChildItem -Path $extract -Filter "avrdude.exe" -Recurse | Select-Object -First 1
+          $conf = Get-ChildItem -Path $extract -Filter "avrdude.conf" -Recurse | Select-Object -First 1
+          if (!$exe -or !$conf) { throw "AVRDUDE archive did not contain avrdude.exe and avrdude.conf." }
+
+          Copy-Item -LiteralPath $exe.FullName -Destination (Join-Path $programmer "avrdude.exe") -Force
+          Copy-Item -LiteralPath $conf.FullName -Destination (Join-Path $programmer "avrdude.conf") -Force
+
+          Get-ChildItem -Path $extract -Filter "*.dll" -Recurse -File | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $programmer $_.Name) -Force
+          }
+
+          $firmware = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Console/Firmware/ATmega328P.hex"
+          if (!(Test-Path $firmware)) { throw "Existing Console/Firmware/ATmega328P.hex was not found." }
+          Copy-Item -LiteralPath $firmware -Destination (Join-Path $programmer "ATmega328P.hex") -Force
+
+      - name: Build and verify 32-bit XP-targeted program
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $programmer = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Programmer"
+          Push-Location $programmer
+          try {
+            & cmd.exe /c 'build-xp-x86.cmd --no-pause'
+            if ($LASTEXITCODE -ne 0) { throw "build-xp-x86.cmd failed with exit code $LASTEXITCODE." }
+
+            & .\1Freq-FM7-Programmer.exe --self-test
+            if ($LASTEXITCODE -ne 0) { throw "Programmer self-test failed with exit code $LASTEXITCODE." }
+
+            $objdump = Join-Path $programmer "toolchain/bin/objdump.exe"
+            $headers = & $objdump -p (Join-Path $programmer "1Freq-FM7-Programmer.exe") | Out-String
+            if ($headers -notmatch "pei-i386") { throw "The output EXE is not 32-bit x86." }
+            if ($headers -notmatch "MajorSubsystemVersion\s+5" -or $headers -notmatch "MinorSubsystemVersion\s+1") {
+              throw "The output EXE does not declare Windows subsystem version 5.01."
+            }
+            Write-Host "Verified: PE32 x86, Windows console subsystem 5.01."
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Create flat portable runtime package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $programmer = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Programmer"
+          Push-Location $programmer
+          try {
+            & cmd.exe /c 'package.cmd --no-pause'
+            if ($LASTEXITCODE -ne 0) { throw "package.cmd failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Upload complete bundle with source and adjacent GCC
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1Freq-FM7-Programmer-Full
+          path: Code/1freq-FM7/Programmer/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload flat application package
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1Freq-FM7-Programmer-Portable
+          path: Code/1freq-FM7/Programmer/dist/1Freq-FM7-Programmer/
+          if-no-files-found: error
+          retention-days: 30
