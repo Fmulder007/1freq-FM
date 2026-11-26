@@ -98,6 +98,14 @@ jobs:
             @{
               Name = "AVRDUDE 7.3 Arduino MinGW32"
               Url  = "https://github.com/avrdudes/avrdude/releases/download/v7.3/avrdude-v7.3-arduino_mingw32.zip"
+            },
+            @{
+              Name = "AVRDUDE 7.1 Windows x86 (XP fallback)"
+              Url  = "https://github.com/mariusgreuel/avrdude/releases/download/v7.1-windows/avrdude-v7.1-windows-windows-x86.zip"
+            },
+            @{
+              Name = "AVRDUDE 6.3.1.1 Windows (XP fallback)"
+              Url  = "https://github.com/mariusgreuel/avrdude/releases/download/v6.3.1.1-windows/avrdude-v6.3.1.1-windows.zip"
             }
           )
 
