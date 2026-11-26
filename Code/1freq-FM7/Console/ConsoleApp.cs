@@ -352,11 +352,11 @@ internal sealed class ConsoleApp
         Console.WriteLine("  1. Прошить HEX и записать эти Fuse-биты");
         Console.WriteLine("  2. Прошить только HEX, не меняя Fuse-биты");
         Console.WriteLine("  0. Назад");
-        Console.Write("Введите 0, 1 или 2 [2]: ");
+        Console.Write("Введите 0, 1 или 2 [1]: ");
 
         var choice = Console.ReadLine()?.Trim();
         if (string.IsNullOrEmpty(choice))
-            choice = "2";
+            choice = "1";
 
         return choice switch
         {
