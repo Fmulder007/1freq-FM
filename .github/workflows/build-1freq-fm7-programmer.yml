@@ -143,8 +143,11 @@ jobs:
               Write-Host "Rejected: statically imports a DLL/API set unavailable on Windows XP."
               continue
             }
-            if ($headers -match "(?i)\b(GetTickCount64|InitializeCriticalSectionEx|GetSystemTimePreciseAsFileTime|GetFileInformationByHandleEx|GetFinalPathNameByHandleW|CancelIoEx|GetUserDefaultLocaleName|GetLocaleInfoEx|SetThreadErrorMode|GetThreadId|AddDllDirectory)\b") {
-              Write-Host "Rejected: imports a Windows API introduced after XP."
+            $postXpPattern = "(?i)\b(GetTickCount64|InitializeCriticalSectionEx|GetSystemTimePreciseAsFileTime|GetFileInformationByHandleEx|GetFinalPathNameByHandleW|CancelIoEx|GetUserDefaultLocaleName|GetLocaleInfoEx|SetThreadErrorMode|GetThreadId|AddDllDirectory)\b"
+            $postXpMatches = [regex]::Matches($headers, $postXpPattern) |
+              ForEach-Object { $_.Value } | Sort-Object -Unique
+            if ($postXpMatches) {
+              Write-Host "Rejected: these post-XP symbols appear in the PE import table: $($postXpMatches -join ', ')"
               continue
             }
 
