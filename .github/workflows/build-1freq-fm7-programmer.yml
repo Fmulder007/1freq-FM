@@ -218,6 +218,19 @@ jobs:
             & .\1Freq-FM7-Programmer.exe --self-test
             if ($LASTEXITCODE -ne 0) { throw "Programmer self-test failed with exit code $LASTEXITCODE." }
 
+            # Validate the exact AVRDUDE binary shipped beside the EXE, without USB hardware.
+            $avrdude = Join-Path $programmer "avrdude.exe"
+            $avrdudeConf = Join-Path $programmer "avrdude.conf"
+            $probeLines = & $avrdude -C $avrdudeConf -p m328p -c usbasp -B 32kHz -? 2>&1
+            $probeOutput = $probeLines | Out-String
+            if ($probeOutput -match "(?i)unknown option|invalid bitclock|error:|no programmer has been specified") {
+              throw "Bundled AVRDUDE rejected a required command-line option: $probeOutput"
+            }
+            if ($probeOutput -notmatch "(?i)Usage:") {
+              throw "Bundled AVRDUDE did not return usage text during the parser compatibility test: $probeOutput"
+            }
+            Write-Host "Verified: bundled AVRDUDE accepts -C, -p m328p, -c usbasp and -B 32kHz."
+
             $objdump = Join-Path $programmer "toolchain/bin/objdump.exe"
             $headers = & $objdump -p (Join-Path $programmer "1Freq-FM7-Programmer.exe") | Out-String
             if ($headers -notmatch "pei-i386") { throw "The output EXE is not 32-bit x86." }

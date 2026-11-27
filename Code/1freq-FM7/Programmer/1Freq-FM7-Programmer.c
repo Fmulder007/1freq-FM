@@ -562,7 +562,7 @@ static void build_avrdude_command(wchar_t *command, size_t capacity,
     append_quoted_argument(command, capacity, exe_path);
     append_command_text(command, capacity, L" -C");
     append_quoted_argument(command, capacity, conf_path);
-    append_command_text(command, capacity, L" -N -p m328p -c usbasp -B 32kHz");
+    append_command_text(command, capacity, L" -p m328p -c usbasp -B 32kHz");
     for (i = 0; i < operation_count; ++i) {
         append_command_text(command, capacity, L" -U");
         append_quoted_argument(command, capacity, operations[i]);
@@ -600,6 +600,41 @@ static void output_process_bytes(const char *bytes, DWORD count)
     }
     free(wide);
 }
+static int contains_ascii_ci(const char *text, const char *needle)
+{
+    size_t i, j;
+    if (!text || !needle || !needle[0]) return 0;
+    for (i = 0; text[i]; ++i) {
+        for (j = 0; needle[j]; ++j) {
+            unsigned char a = (unsigned char)text[i + j];
+            unsigned char b = (unsigned char)needle[j];
+            if (!a) break;
+            if (a >= 'A' && a <= 'Z') a = (unsigned char)(a - 'A' + 'a');
+            if (b >= 'A' && b <= 'Z') b = (unsigned char)(b - 'A' + 'a');
+            if (a != b) break;
+        }
+        if (!needle[j]) return 1;
+    }
+    return 0;
+}
+
+/* AVRDUDE 6.3 may print a command-line error and still return exit code 0. */
+static int avrdude_output_reports_error(const char *text)
+{
+    return contains_ascii_ci(text, "unknown option") ||
+           contains_ascii_ci(text, "usage:") ||
+           contains_ascii_ci(text, "error:") ||
+           contains_ascii_ci(text, "invalid bitclock") ||
+           contains_ascii_ci(text, "cannot set sck period") ||
+           contains_ascii_ci(text, "can't open") ||
+           contains_ascii_ci(text, "cannot open") ||
+           contains_ascii_ci(text, "could not open") ||
+           contains_ascii_ci(text, "could not find usb device") ||
+           contains_ascii_ci(text, "no programmer has been specified") ||
+           contains_ascii_ci(text, "initialization failed") ||
+           contains_ascii_ci(text, "initialisation failed") ||
+           contains_ascii_ci(text, "not in sync");
+}
 #endif
 
 static int run_avrdude(const wchar_t *const operations[], unsigned operation_count)
@@ -613,6 +648,8 @@ static int run_avrdude(const wchar_t *const operations[], unsigned operation_cou
     SECURITY_ATTRIBUTES security;
     HANDLE read_pipe = NULL, write_pipe = NULL;
     DWORD exit_code = 1;
+    char diagnostic_tail[512] = {0};
+    int output_reports_error = 0;
     join_path(exe_path, PATH_CAP, L"avrdude.exe");
     join_path(conf_path, PATH_CAP, L"avrdude.conf");
     wcscpy(working_directory, g_root);
@@ -648,19 +685,44 @@ static int run_avrdude(const wchar_t *const operations[], unsigned operation_cou
     for (;;) {
         char buffer[2048];
         DWORD bytes_read = 0;
+        size_t tail_length, keep_length, copy_length;
+        const char *copy_source = buffer;
         if (!ReadFile(read_pipe, buffer, sizeof(buffer), &bytes_read, NULL) || bytes_read == 0) break;
         output_process_bytes(buffer, bytes_read);
+
+        /* Keep an overlap so diagnostic phrases split across pipe reads are detected. */
+        tail_length = strlen(diagnostic_tail);
+        keep_length = tail_length > 255u ? 255u : tail_length;
+        if (tail_length > keep_length)
+            memmove(diagnostic_tail, diagnostic_tail + tail_length - keep_length, keep_length);
+        diagnostic_tail[keep_length] = '\0';
+        copy_length = (size_t)bytes_read;
+        if (copy_length > sizeof(diagnostic_tail) - keep_length - 1u) {
+            size_t skip = copy_length - (sizeof(diagnostic_tail) - keep_length - 1u);
+            copy_source += skip;
+            copy_length -= skip;
+        }
+        memcpy(diagnostic_tail + keep_length, copy_source, copy_length);
+        diagnostic_tail[keep_length + copy_length] = '\0';
+        if (avrdude_output_reports_error(diagnostic_tail))
+            output_reports_error = 1;
     }
     CloseHandle(read_pipe);
     WaitForSingleObject(process.hProcess, INFINITE);
     if (GetExitCodeProcess(process.hProcess, &exit_code)) {
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
-        if (exit_code == 0) {
+        if (exit_code == 0 && !output_reports_error) {
             output_wide(L"AVRDUDE: операция выполнена успешно.\n");
             return 1;
         }
-        output_format(L"ОШИБКА: AVRDUDE завершился с кодом %u.\n", (unsigned)exit_code);
+        if (output_reports_error) {
+            output_wide(L"ОШИБКА: AVRDUDE сообщил об ошибке или вывел Usage. Операция не считается успешной.\n");
+            if (exit_code == 0)
+                output_wide(L"AVRDUDE вернул код 0, но сообщение об ошибке имеет приоритет.\n");
+        }
+        if (exit_code != 0)
+            output_format(L"ОШИБКА: AVRDUDE завершился с кодом %u.\n", (unsigned)exit_code);
         return 0;
     }
     CloseHandle(process.hThread);
@@ -894,7 +956,7 @@ static int self_test_avrdude_command(void)
     const wchar_t expected[] =
         L"\"C:\\Program Files\\AVRDUDE\\avrdude.exe\""
         L" -C \"C:\\Program Files\\AVRDUDE\\avrdude.conf\""
-        L" -N -p m328p -c usbasp -B 32kHz"
+        L" -p m328p -c usbasp -B 32kHz"
         L" -U \"eeprom:r:eeprom_read.tmp.bin:r\"";
 
     build_avrdude_command(command, sizeof(command) / sizeof(command[0]),
@@ -903,6 +965,14 @@ static int self_test_avrdude_command(void)
                           operations, 1);
     if (wcscmp(command, expected) != 0) {
         output_format(L"SELF-TEST FAIL: неверная строка запуска AVRDUDE: %ls\n", command);
+        return 0;
+    }
+    if (!avrdude_output_reports_error("avrdude.exe: unknown option -- N") ||
+        !avrdude_output_reports_error("Usage: avrdude.exe [options]") ||
+        !avrdude_output_reports_error("avrdude.exe: error: programmer not responding") ||
+        !avrdude_output_reports_error("avrdude.exe: warning: cannot set SCK period") ||
+        avrdude_output_reports_error("avrdude done. Thank you.")) {
+        output_wide(L"SELF-TEST FAIL: не распознаются ошибки AVRDUDE.\n");
         return 0;
     }
     return 1;
