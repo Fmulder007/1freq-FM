@@ -545,9 +545,28 @@ static void append_command_text(wchar_t *command, size_t capacity, const wchar_t
 
 static void append_quoted_argument(wchar_t *command, size_t capacity, const wchar_t *argument)
 {
-    append_command_text(command, capacity, L" \"");
+    /* argv[0] must start with the executable path, never with whitespace. */
+    if (command[0] != L'\0')
+        append_command_text(command, capacity, L" ");
+    append_command_text(command, capacity, L"\"");
     append_command_text(command, capacity, argument);
     append_command_text(command, capacity, L"\"");
+}
+
+static void build_avrdude_command(wchar_t *command, size_t capacity,
+                                  const wchar_t *exe_path, const wchar_t *conf_path,
+                                  const wchar_t *const operations[], unsigned operation_count)
+{
+    unsigned i;
+    command[0] = L'\0';
+    append_quoted_argument(command, capacity, exe_path);
+    append_command_text(command, capacity, L" -C");
+    append_quoted_argument(command, capacity, conf_path);
+    append_command_text(command, capacity, L" -N -p m328p -c usbasp -B 32kHz");
+    for (i = 0; i < operation_count; ++i) {
+        append_command_text(command, capacity, L" -U");
+        append_quoted_argument(command, capacity, operations[i]);
+    }
 }
 
 static void output_process_bytes(const char *bytes, DWORD count)
@@ -594,7 +613,6 @@ static int run_avrdude(const wchar_t *const operations[], unsigned operation_cou
     SECURITY_ATTRIBUTES security;
     HANDLE read_pipe = NULL, write_pipe = NULL;
     DWORD exit_code = 1;
-    unsigned i;
     join_path(exe_path, PATH_CAP, L"avrdude.exe");
     join_path(conf_path, PATH_CAP, L"avrdude.conf");
     wcscpy(working_directory, g_root);
@@ -602,15 +620,7 @@ static int run_avrdude(const wchar_t *const operations[], unsigned operation_cou
         output_wide(L"ОШИБКА: рядом с программой должны находиться avrdude.exe и avrdude.conf.\n");
         return 0;
     }
-    command[0] = L'\0';
-    append_quoted_argument(command, MAX_COMMAND, exe_path);
-    append_command_text(command, MAX_COMMAND, L" -C");
-    append_quoted_argument(command, MAX_COMMAND, conf_path);
-    append_command_text(command, MAX_COMMAND, L" -N -p m328p -c usbasp -B 32kHz");
-    for (i = 0; i < operation_count; ++i) {
-        append_command_text(command, MAX_COMMAND, L" -U");
-        append_quoted_argument(command, MAX_COMMAND, operations[i]);
-    }
+    build_avrdude_command(command, MAX_COMMAND, exe_path, conf_path, operations, operation_count);
     output_wide(L"\n> AVRDUDE: USBasp, ATmega328P, ISP 32 кГц\n");
     memset(&security, 0, sizeof(security));
     security.nLength = sizeof(security);
@@ -876,10 +886,36 @@ static int self_test_large_eeprom_value(void)
     return 1;
 }
 
+#ifdef _WIN32
+static int self_test_avrdude_command(void)
+{
+    wchar_t command[1024];
+    const wchar_t *operations[] = {L"eeprom:r:eeprom_read.tmp.bin:r"};
+    const wchar_t expected[] =
+        L"\"C:\\Program Files\\AVRDUDE\\avrdude.exe\""
+        L" -C \"C:\\Program Files\\AVRDUDE\\avrdude.conf\""
+        L" -N -p m328p -c usbasp -B 32kHz"
+        L" -U \"eeprom:r:eeprom_read.tmp.bin:r\"";
+
+    build_avrdude_command(command, sizeof(command) / sizeof(command[0]),
+                          L"C:\\Program Files\\AVRDUDE\\avrdude.exe",
+                          L"C:\\Program Files\\AVRDUDE\\avrdude.conf",
+                          operations, 1);
+    if (wcscmp(command, expected) != 0) {
+        output_format(L"SELF-TEST FAIL: неверная строка запуска AVRDUDE: %ls\n", command);
+        return 0;
+    }
+    return 1;
+}
+#endif
+
 static int self_test(void)
 {
     wchar_t path[PATH_CAP];
     EepromSettings settings;
+#ifdef _WIN32
+    if (!self_test_avrdude_command()) return 1;
+#endif
     join_path(path, PATH_CAP, L"eeprom.hex");
     if (!validate_eeprom_file(path, &settings)) {
         output_wide(L"SELF-TEST FAIL: eeprom.hex не соответствует схеме FM7.\n");
@@ -894,7 +930,7 @@ static int self_test(void)
         output_wide(L"SELF-TEST FAIL: ATmega328P.hex повреждён или выходит за объём Flash.\n");
         return 1;
     }
-    output_wide(L"SELF-TEST OK: EEPROM (5 x 16 байт), большое значение 9999999999 и Flash HEX проверены.\n");
+    output_wide(L"SELF-TEST OK: команда AVRDUDE, EEPROM (5 x 16 байт), большое значение 9999999999 и Flash HEX проверены.\n");
     show_settings(&settings);
     return 0;
 }
