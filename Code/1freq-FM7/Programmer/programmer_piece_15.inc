@@ -22,30 +22,30 @@ static int read_eeprom_from_mcu(void)
     delete_file(raw_path);
     delete_file(temporary_hex_path);
 
-    output_wide(L"\\nСчитывание EEPROM микроконтроллера...\\n");
+    output_wide(L"\nСчитывание EEPROM микроконтроллера...\n");
     if (!run_avrdude(read_operation, 1)) {
         delete_file(raw_path);
-        output_wide(L"EEPROM не считана. Существующий eeprom.hex не изменён.\\n");
+        output_wide(L"EEPROM не считана. Существующий eeprom.hex не изменён.\n");
         return 0;
     }
 
     file = open_file(raw_path, "rb");
     if (!file) {
         delete_file(raw_path);
-        output_wide(L"ОШИБКА: AVRDUDE не создал файл считанной EEPROM.\\n");
+        output_wide(L"ОШИБКА: AVRDUDE не создал файл считанной EEPROM.\n");
         return 0;
     }
     bytes_read = fread(raw, 1, sizeof(raw), file);
     fclose(file);
     delete_file(raw_path);
     if (bytes_read != sizeof(raw)) {
-        output_wide(L"ОШИБКА: не удалось получить первые 80 байт EEPROM. Старый файл не изменён.\\n");
+        output_wide(L"ОШИБКА: не удалось получить первые 80 байт EEPROM. Старый файл не изменён.\n");
         return 0;
     }
 
     /* No tag, range or numeric validation here: preserve the 80 bytes exactly as read. */
     if (!save_eeprom_raw_hex(temporary_hex_path, raw)) {
-        output_wide(L"ОШИБКА: не удалось подготовить новый eeprom.hex. Старый файл не изменён.\\n");
+        output_wide(L"ОШИБКА: не удалось подготовить новый eeprom.hex. Старый файл не изменён.\n");
         return 0;
     }
 
@@ -68,14 +68,14 @@ static int read_eeprom_from_mcu(void)
             }
             if (attempt > 99) {
                 delete_file(temporary_hex_path);
-                output_wide(L"ОШИБКА: не удалось подобрать имя для резервного старого файла.\\n");
+                output_wide(L"ОШИБКА: не удалось подобрать имя для резервного старого файла.\n");
                 return 0;
             }
         }
 
         if (!move_file_no_replace(eeprom_path, backup_path)) {
             delete_file(temporary_hex_path);
-            output_wide(L"ОШИБКА: не удалось переименовать существующий eeprom.hex.\\n");
+            output_wide(L"ОШИБКА: не удалось переименовать существующий eeprom.hex.\n");
             return 0;
         }
         has_backup = 1;
@@ -84,23 +84,23 @@ static int read_eeprom_from_mcu(void)
     if (!move_file_no_replace(temporary_hex_path, eeprom_path)) {
         if (has_backup) {
             if (move_file_no_replace(backup_path, eeprom_path))
-                output_wide(L"Не удалось установить новый файл; старый eeprom.hex восстановлен.\\n");
+                output_wide(L"Не удалось установить новый файл; старый eeprom.hex восстановлен.\n");
             else
-                output_format(L"ОШИБКА: новый файл не установлен. Старый файл сохранён здесь: %ls\\n", backup_path);
+                output_format(L"ОШИБКА: новый файл не установлен. Старый файл сохранён здесь: %ls\n", backup_path);
         } else {
-            output_wide(L"ОШИБКА: не удалось установить новый eeprom.hex.\\n");
+            output_wide(L"ОШИБКА: не удалось установить новый eeprom.hex.\n");
         }
         delete_file(temporary_hex_path);
         return 0;
     }
 
     if (has_backup)
-        output_format(L"Старый файл переименован: %ls\\n", backup_path);
-    output_wide(L"EEPROM успешно считана. Сохранены первые 80 байт (адреса 0x00–0x4F).\\n");
-    output_wide(L"Новый файл eeprom.hex сохранён рядом с программой.\\n");
+        output_format(L"Старый файл переименован: %ls\n", backup_path);
+    output_wide(L"EEPROM успешно считана. Сохранены первые 80 байт (адреса 0x00–0x4F).\n");
+    output_wide(L"Новый файл eeprom.hex сохранён рядом с программой.\n");
     return 1;
 #else
-    output_wide(L"Считывание EEPROM доступно только в Windows.\\n");
+    output_wide(L"Считывание EEPROM доступно только в Windows.\n");
     return 0;
 #endif
 }
@@ -131,33 +131,33 @@ static int self_test(void)
     EepromSettings settings;
     join_path(path, PATH_CAP, L"eeprom.hex");
     if (!validate_eeprom_file(path, &settings)) {
-        output_wide(L"SELF-TEST FAIL: eeprom.hex не соответствует схеме FM7.\\n");
+        output_wide(L"SELF-TEST FAIL: eeprom.hex не соответствует схеме FM7.\n");
         return 1;
     }
     if (!self_test_large_eeprom_value()) {
-        output_wide(L"SELF-TEST FAIL: не сохраняется и не читается число 9999999999.\\n");
+        output_wide(L"SELF-TEST FAIL: не сохраняется и не читается число 9999999999.\n");
         return 1;
     }
     join_path(path, PATH_CAP, L"ATmega328P.hex");
     if (!validate_flash_file(path, 32768u)) {
-        output_wide(L"SELF-TEST FAIL: ATmega328P.hex повреждён или выходит за объём Flash.\\n");
+        output_wide(L"SELF-TEST FAIL: ATmega328P.hex повреждён или выходит за объём Flash.\n");
         return 1;
     }
-    output_wide(L"SELF-TEST OK: EEPROM (5 x 16 байт), большое значение 9999999999 и Flash HEX проверены.\\n");
+    output_wide(L"SELF-TEST OK: EEPROM (5 x 16 байт), большое значение 9999999999 и Flash HEX проверены.\n");
     show_settings(&settings);
     return 0;
 }
 
 static void show_menu(void)
 {
-    output_wide(L"\\n==============================================\\n");
-    output_wide(L"             1Freq-FM7 Programmer\\n");
-    output_wide(L"==============================================\\n");
-    output_wide(L"  1. Считать EEPROM из микроконтроллера\\n");
-    output_wide(L"  2. Редактировать EEPROM-файл\\n");
-    output_wide(L"  3. Прошивка Firmware и Fuse\\n");
-    output_wide(L"  4. Записать только EEPROM\\n");
-    output_wide(L"  5. Выход\\n\\n");
+    output_wide(L"\n==============================================\n");
+    output_wide(L"             1Freq-FM7 Programmer\n");
+    output_wide(L"==============================================\n");
+    output_wide(L"  1. Считать EEPROM из микроконтроллера\n");
+    output_wide(L"  2. Редактировать EEPROM-файл\n");
+    output_wide(L"  3. Прошивка Firmware и Fuse\n");
+    output_wide(L"  4. Записать только EEPROM\n");
+    output_wide(L"  5. Выход\n\n");
     output_wide(L"Выберите пункт [5]: ");
 }
 
@@ -178,7 +178,7 @@ int main(int argc, char **argv)
         else if (wcscmp(input, L"2") == 0) edit_eeprom_file();
         else if (wcscmp(input, L"3") == 0) program_firmware_and_fuses();
         else if (wcscmp(input, L"4") == 0) program_eeprom();
-        else output_wide(L"Неизвестный пункт меню. Введите 1, 2, 3, 4 или 5.\\n");
+        else output_wide(L"Неизвестный пункт меню. Введите 1, 2, 3, 4 или 5.\n");
         pause_for_enter();
     }
 }
