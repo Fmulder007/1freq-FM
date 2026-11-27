@@ -210,6 +210,13 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $programmer = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Programmer"
+          # Lock the published Flash image to the user-confirmed working build.
+          $expectedFirmwareBlob = "69341344e7a2be25997b70c638cb205f898e827b"
+          $firmwareBlob = (& git -C $env:GITHUB_WORKSPACE rev-parse "HEAD:Code/1freq-FM7/Programmer/ATmega328P.hex").Trim()
+          if ($LASTEXITCODE -ne 0 -or $firmwareBlob -ne $expectedFirmwareBlob) {
+            throw "Programmer/ATmega328P.hex is not the verified working FM7 build. Expected Git blob $expectedFirmwareBlob; got $firmwareBlob."
+          }
+          Write-Host "Verified exact known-working FM7 firmware blob: $firmwareBlob"
           Push-Location $programmer
           try {
             & cmd.exe /c 'build-xp-x86.cmd --no-pause'
@@ -286,13 +293,17 @@ jobs:
               '1Freq-FM7-Programmer.exe',
               'avrdude.exe',
               'avrdude.conf',
-              'avrdude-build-info.txt',
-              'ATmega328P.hex'
+              'avrdude-build-info.txt'
             ];
             for (const name of required) {
               if (!fs.existsSync(path.join(localDirectory, name))) {
                 throw new Error('Required runtime file is missing: ' + name);
               }
+            }
+            // This verified firmware is a tracked source input, not a generated runtime binary.
+            // Keep its exact Git blob untouched by the Windows checkout's line-ending conversion.
+            if (!fs.existsSync(path.join(localDirectory, 'ATmega328P.hex'))) {
+              throw new Error('The verified Programmer/ATmega328P.hex input is missing.');
             }
 
             const dlls = fs.readdirSync(localDirectory)
@@ -336,8 +347,7 @@ jobs:
               '1Freq-FM7-Programmer.exe',
               'avrdude.exe',
               'avrdude.conf',
-              'avrdude-build-info.txt',
-              'ATmega328P.hex'
+              'avrdude-build-info.txt'
             ]);
             for (const item of currentFiles.data) {
               if (item.type !== 'file') continue;
