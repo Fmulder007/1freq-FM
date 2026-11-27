@@ -45,20 +45,3 @@ static int edit_eeprom_file(void)
                           (unsigned long long)settings.value[i]);
             if (!input_line(input, INPUT_CAP)) return 0;
             trim_wide(input);
-            if (!input[0]) break;
-            if (parse_input_value(input, &value) && value >= g_parameters[i].min_value &&
-                value <= g_parameters[i].max_value && (i != 1 || value == 5u || value == 6u)) {
-                settings.value[i] = value;
-                break;
-            }
-            output_wide(L"Недопустимое значение. Повторите ввод.\n");
-        }
-    }
-    if (!save_eeprom_file(path, &settings)) {
-        output_wide(L"ОШИБКА: не удалось сохранить eeprom.hex.\n");
-        return 0;
-    }
-    output_wide(L"\nФайл eeprom.hex сохранён. Итоговые значения:\n");
-    show_settings(&settings);
-    return 1;
-}

@@ -179,6 +179,3 @@ int main(int argc, char **argv)
         else if (wcscmp(input, L"3") == 0) program_firmware_and_fuses();
         else if (wcscmp(input, L"4") == 0) program_eeprom();
         else output_wide(L"Неизвестный пункт меню. Введите 1, 2, 3, 4 или 5.\n");
-        pause_for_enter();
-    }
-}
