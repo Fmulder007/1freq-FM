@@ -1,7 +1,6 @@
 # Generated compiler toolchain and local build outputs
 toolchain/
 dist/
-1Freq-FM7-Programmer.exe
 
 # AVRDUDE/runtime files downloaded by the bundle workflow
 avrdude.exe
@@ -9,3 +8,9 @@ avrdude.conf
 avrdude-build-info.txt
 ATmega328P.hex
 *.dll
+
+# Temporary EEPROM read/write files
+eeprom_read.tmp.bin
+eeprom.hex.tmp
+eeprom-selftest.tmp.hex
+eeprom-selftest.tmp.hex.tmp

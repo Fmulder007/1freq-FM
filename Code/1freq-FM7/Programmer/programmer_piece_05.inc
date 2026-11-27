@@ -8,6 +8,35 @@ static int file_exists(const wchar_t *path)
     return 1;
 }
 
+static int delete_file(const wchar_t *path)
+{
+#ifdef _WIN32
+    if (DeleteFileW(path)) return 1;
+    return GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
+#else
+    char narrow[PATH_CAP];
+    if (wcstombs(narrow, path, sizeof(narrow) - 1) == (size_t)-1) return 0;
+    narrow[sizeof(narrow) - 1] = '\0';
+    if (remove(narrow) == 0) return 1;
+    return 0;
+#endif
+}
+
+static int move_file_no_replace(const wchar_t *source, const wchar_t *destination)
+{
+#ifdef _WIN32
+    return MoveFileW(source, destination) != 0;
+#else
+    char src[PATH_CAP], dst[PATH_CAP];
+    if (wcstombs(src, source, sizeof(src) - 1) == (size_t)-1) return 0;
+    if (wcstombs(dst, destination, sizeof(dst) - 1) == (size_t)-1) return 0;
+    src[sizeof(src) - 1] = '\0';
+    dst[sizeof(dst) - 1] = '\0';
+    if (file_exists(destination)) return 0;
+    return rename(src, dst) == 0;
+#endif
+}
+
 static int move_file_replace(const wchar_t *source, const wchar_t *destination)
 {
 #ifdef _WIN32

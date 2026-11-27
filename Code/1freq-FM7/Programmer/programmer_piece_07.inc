@@ -1,5 +1,3 @@
-}
-
 static int validate_eeprom_file(const wchar_t *path, EepromSettings *settings)
 {
     FILE *file = open_file(path, "rb");
@@ -15,7 +13,7 @@ static int validate_eeprom_file(const wchar_t *path, EepromSettings *settings)
         if (length == 0) continue;
         if (eof_seen || !parse_intel_record(line, &record)) { valid = 0; break; }
         if (record_number < EEPROM_RECORDS) {
-            uint32_t value;
+            uint64_t value;
             if (record.type != 0 || record.count != EEPROM_RECORD_SIZE ||
                 record.address != g_parameters[record_number].address ||
                 !parse_parameter_value(record.data, record_number, &value)) {

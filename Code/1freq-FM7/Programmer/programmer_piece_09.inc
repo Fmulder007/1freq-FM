@@ -28,18 +28,55 @@ static int save_eeprom_file(const wchar_t *path, const EepromSettings *settings)
         char value[24];
         int text_length;
         memset(data, 0, sizeof(data));
-        sprintf(value, "%s=%u", g_parameters[i].tag, (unsigned)settings->value[i]);
+        sprintf(value, "%s=%llu", g_parameters[i].tag, (unsigned long long)settings->value[i]);
         text_length = (int)strlen(value);
-        if (text_length >= EEPROM_RECORD_SIZE) { fclose(file); return 0; }
+        if (text_length >= EEPROM_RECORD_SIZE) {
+            fclose(file);
+            delete_file(temporary);
+            return 0;
+        }
         memcpy(data, value, (size_t)text_length);
         make_intel_record(line, g_parameters[i].address, data);
-        if (fwrite(line, 1, strlen(line), file) != strlen(line)) { fclose(file); return 0; }
+        if (fwrite(line, 1, strlen(line), file) != strlen(line)) {
+            fclose(file);
+            delete_file(temporary);
+            return 0;
+        }
     }
-    if (fwrite(":00000001FF\r\n", 1, 13, file) != 13) { fclose(file); return 0; }
-    if (fflush(file) != 0) { fclose(file); return 0; }
-    fclose(file);
-    if (!move_file_replace(temporary, path)) return 0;
+    if (fwrite(":00000001FF\r\n", 1, 13, file) != 13 || fflush(file) != 0) {
+        fclose(file);
+        delete_file(temporary);
+        return 0;
+    }
+    if (fclose(file) != 0) {
+        delete_file(temporary);
+        return 0;
+    }
+    if (!move_file_replace(temporary, path)) {
+        delete_file(temporary);
+        return 0;
+    }
     return 1;
 }
 
-static void default_settings(EepromSettings *settings)
+/* Save the exact five raw EEPROM records without interpreting or changing their bytes. */
+static int save_eeprom_raw_hex(const wchar_t *path, const unsigned char raw[EEPROM_RECORD_SIZE * EEPROM_RECORDS])
+{
+    FILE *file = open_file(path, "wb");
+    char line[64];
+    unsigned i;
+    int ok = 1;
+    if (!file) return 0;
+    for (i = 0; i < EEPROM_RECORDS; ++i) {
+        make_intel_record(line, g_parameters[i].address, raw + i * EEPROM_RECORD_SIZE);
+        if (fwrite(line, 1, strlen(line), file) != strlen(line)) {
+            ok = 0;
+            break;
+        }
+    }
+    if (ok && fwrite(":00000001FF\r\n", 1, 13, file) != 13) ok = 0;
+    if (ok && fflush(file) != 0) ok = 0;
+    if (fclose(file) != 0) ok = 0;
+    if (!ok) delete_file(path);
+    return ok;
+}

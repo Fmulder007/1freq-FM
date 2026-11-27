@@ -21,7 +21,7 @@
     return (sum & 0xFFu) == 0;
 }
 
-static int parse_parameter_value(const unsigned char data[EEPROM_RECORD_SIZE], unsigned index, uint32_t *value)
+static int parse_parameter_value(const unsigned char data[EEPROM_RECORD_SIZE], unsigned index, uint64_t *value)
 {
     const char *tag = g_parameters[index].tag;
     unsigned i = 3;
@@ -30,7 +30,6 @@ static int parse_parameter_value(const unsigned char data[EEPROM_RECORD_SIZE], u
     if (data[0] != (unsigned char)tag[0] || data[1] != (unsigned char)tag[1] || data[2] != '=') return 0;
     while (i < EEPROM_RECORD_SIZE && data[i] >= '0' && data[i] <= '9') {
         number = number * 10u + (uint64_t)(data[i] - '0');
-        if (number > 0xFFFFFFFFu) return 0;
         digit_count++;
         i++;
     }
@@ -39,7 +38,7 @@ static int parse_parameter_value(const unsigned char data[EEPROM_RECORD_SIZE], u
         if (data[i] != 0) return 0;
         i++;
     }
-    if (number < g_parameters[index].min_value || number > g_parameters[index].max_value) return 0;
-    if (index == 1 && number != 5u && number != 6u) return 0;
-    *value = (uint32_t)number;
+    /* Reading and re-writing an existing EEPROM value must not apply editor limits. */
+    *value = number;
     return 1;
+}

@@ -1,3 +1,4 @@
+static void default_settings(EepromSettings *settings)
 {
     unsigned i;
     for (i = 0; i < EEPROM_RECORDS; ++i) settings->value[i] = g_parameters[i].default_value;
@@ -7,7 +8,7 @@ static void show_settings(const EepromSettings *settings)
 {
     unsigned i;
     for (i = 0; i < EEPROM_RECORDS; ++i)
-        output_format(L"  %hs=%u\n", g_parameters[i].tag, (unsigned)settings->value[i]);
+        output_format(L"  %hs=%llu\n", g_parameters[i].tag, (unsigned long long)settings->value[i]);
 }
 
 static int parse_input_value(const wchar_t *text, uint32_t *value)
@@ -31,7 +32,7 @@ static int edit_eeprom_file(void)
     join_path(path, PATH_CAP, L"eeprom.hex");
     default_settings(&settings);
     if (file_exists(path) && !validate_eeprom_file(path, &settings)) {
-        output_wide(L"ПРЕДУПРЕЖДЕНИЕ: eeprom.hex повреждён или имеет неверный формат.\n");
+        output_wide(L"ПРЕДУПРЕЖДЕНИЕ: eeprom.hex имеет неверный формат записей.\n");
         output_wide(L"Для редактирования загружены значения по умолчанию. Файл будет заменён только после сохранения.\n\n");
         default_settings(&settings);
     }
@@ -40,6 +41,24 @@ static int edit_eeprom_file(void)
     for (i = 0; i < EEPROM_RECORDS; ++i) {
         for (;;) {
             uint32_t value;
-            output_format(L"%ls [%u]: ", g_parameters[i].description, (unsigned)settings.value[i]);
+            output_format(L"%ls [%llu]: ", g_parameters[i].description,
+                          (unsigned long long)settings.value[i]);
             if (!input_line(input, INPUT_CAP)) return 0;
             trim_wide(input);
+            if (!input[0]) break;
+            if (parse_input_value(input, &value) && value >= g_parameters[i].min_value &&
+                value <= g_parameters[i].max_value && (i != 1 || value == 5u || value == 6u)) {
+                settings.value[i] = value;
+                break;
+            }
+            output_wide(L"Недопустимое значение. Повторите ввод.\n");
+        }
+    }
+    if (!save_eeprom_file(path, &settings)) {
+        output_wide(L"ОШИБКА: не удалось сохранить eeprom.hex.\n");
+        return 0;
+    }
+    output_wide(L"\nФайл eeprom.hex сохранён. Итоговые значения:\n");
+    show_settings(&settings);
+    return 1;
+}

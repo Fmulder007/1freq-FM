@@ -36,10 +36,12 @@ typedef struct {
 } EepromParameter;
 
 typedef struct {
-    uint32_t value[EEPROM_RECORDS];
+    uint64_t value[EEPROM_RECORDS];
 } EepromSettings;
 
 typedef struct {
     unsigned count;
     unsigned address;
     unsigned type;
+    unsigned char data[256];
+} IntelHexRecord;
