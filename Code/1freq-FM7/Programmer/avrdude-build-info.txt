@@ -1,0 +1,4 @@
+AVRDUDE 6.3.0 Arduino 32-bit Windows (XP fallback)
+Windows subsystem: 4.0
+Selected after checking PE32 x86 architecture, Windows XP subsystem level,
+static imports, and successful startup on the Windows build host.
