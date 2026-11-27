@@ -210,6 +210,13 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $programmer = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Programmer"
+          # Lock the published Flash image to the user-confirmed working build.
+          $expectedFirmwareBlob = "69341344e7a2be25997b70c638cb205f898e827b"
+          $firmwareBlob = (& git -C $env:GITHUB_WORKSPACE rev-parse "HEAD:Code/1freq-FM7/Programmer/ATmega328P.hex").Trim()
+          if ($LASTEXITCODE -ne 0 -or $firmwareBlob -ne $expectedFirmwareBlob) {
+            throw "Programmer/ATmega328P.hex is not the verified working FM7 build. Expected Git blob $expectedFirmwareBlob; got $firmwareBlob."
+          }
+          Write-Host "Verified exact known-working FM7 firmware blob: $firmwareBlob"
           Push-Location $programmer
           try {
             & cmd.exe /c 'build-xp-x86.cmd --no-pause'
