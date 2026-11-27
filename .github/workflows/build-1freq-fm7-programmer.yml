@@ -200,9 +200,9 @@ jobs:
           Write-Host "AVRDUDE subsystem: $($selected.Major).$($selected.Minor)"
           Write-Host "Bundled AVRDUDE DLL count: $((Get-ChildItem $programmer -Filter '*.dll' -File).Count)"
 
-          $firmware = Join-Path $env:GITHUB_WORKSPACE "Code/1freq-FM7/Console/Firmware/ATmega328P.hex"
-          if (!(Test-Path $firmware)) { throw "The existing Console/Firmware/ATmega328P.hex was not found." }
-          Copy-Item -LiteralPath $firmware -Destination (Join-Path $programmer "ATmega328P.hex") -Force
+          # Programmer now carries its own firmware HEX; it no longer depends on the retired Console folder.
+          $firmware = Join-Path $programmer "ATmega328P.hex"
+          if (!(Test-Path $firmware)) { throw "Programmer/ATmega328P.hex was not found in the repository." }
           if (!(Test-Path (Join-Path $programmer "eeprom.hex"))) { throw "Programmer/eeprom.hex was not found in the repository." }
 
       - name: Build and verify 32-bit XP-targeted program
