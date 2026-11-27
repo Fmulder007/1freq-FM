@@ -293,13 +293,17 @@ jobs:
               '1Freq-FM7-Programmer.exe',
               'avrdude.exe',
               'avrdude.conf',
-              'avrdude-build-info.txt',
-              'ATmega328P.hex'
+              'avrdude-build-info.txt'
             ];
             for (const name of required) {
               if (!fs.existsSync(path.join(localDirectory, name))) {
                 throw new Error('Required runtime file is missing: ' + name);
               }
+            }
+            // This verified firmware is a tracked source input, not a generated runtime binary.
+            // Keep its exact Git blob untouched by the Windows checkout's line-ending conversion.
+            if (!fs.existsSync(path.join(localDirectory, 'ATmega328P.hex'))) {
+              throw new Error('The verified Programmer/ATmega328P.hex input is missing.');
             }
 
             const dlls = fs.readdirSync(localDirectory)
@@ -343,8 +347,7 @@ jobs:
               '1Freq-FM7-Programmer.exe',
               'avrdude.exe',
               'avrdude.conf',
-              'avrdude-build-info.txt',
-              'ATmega328P.hex'
+              'avrdude-build-info.txt'
             ]);
             for (const item of currentFiles.data) {
               if (item.type !== 'file') continue;
