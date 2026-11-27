@@ -1,15 +1,12 @@
-# Generated compiler toolchain and local build outputs
+# Local compiler and generated package directories
 toolchain/
 dist/
 
-# AVRDUDE/runtime files downloaded by the bundle workflow
-avrdude.exe
-avrdude.conf
-avrdude-build-info.txt
-ATmega328P.hex
-*.dll
+# These runtime files are intentionally published beside the EXE:
+# avrdude.exe, avrdude.conf, avrdude-build-info.txt,
+# ATmega328P.hex and all required *.dll files must remain tracked.
 
-# Temporary EEPROM read/write files
+# Temporary EEPROM read/write and self-test files
 eeprom_read.tmp.bin
 eeprom.hex.tmp
 eeprom-selftest.tmp.hex
